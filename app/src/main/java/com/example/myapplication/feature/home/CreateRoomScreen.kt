@@ -1,5 +1,11 @@
 package com.example.myapplication.feature.home
 
+import android.app.Activity
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -22,10 +28,11 @@ import io.github.jan.supabase.gotrue.auth
 import kotlinx.coroutines.launch
 import java.util.UUID
 import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.core.content.ContextCompat
+import com.example.myapplication.MainActivity
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -46,7 +53,6 @@ fun CreateRoomScreen(navController: NavController, vm: RoomListViewModel = viewM
     )
 
     val scope = rememberCoroutineScope()
-
     val grayBackground = Color(0xFFF5F5F5)
     val grayPrimary = Color(0xFFBDBDBD)
     val grayDark = Color(0xFF424242)
@@ -57,6 +63,47 @@ fun CreateRoomScreen(navController: NavController, vm: RoomListViewModel = viewM
     var flower by remember { mutableStateOf(false) }
     var ligu by remember { mutableStateOf(false) }
     var diceRule by remember { mutableStateOf(false) }
+
+    // ▼ Google Places 選擇麻將館 ▼
+    val context = LocalContext.current
+    var selectedPlaceName by remember { mutableStateOf("") }
+    var selectedPlaceAddress by remember { mutableStateOf("") }
+
+
+    // 監聽 MainActivity 廣播，接收地點結果
+    DisposableEffect(context) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(ctx: Context?, intent: Intent?) {
+                selectedPlaceName = intent?.getStringExtra("name") ?: ""
+                selectedPlaceAddress = intent?.getStringExtra("address") ?: ""
+                println("✅ Compose接收到廣播：$selectedPlaceName / $selectedPlaceAddress")
+                android.util.Log.d("PlacesDebug", "✅ Compose 接收到廣播：$selectedPlaceName / $selectedPlaceAddress")
+            }
+        }
+
+        val filter = IntentFilter(MainActivity.PLACE_SELECTED_ACTION)
+
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            context.registerReceiver(receiver, filter)
+        }
+
+        // ✅ 使用 ContextCompat，支援所有版本
+        ContextCompat.registerReceiver(
+            context,
+            receiver,
+            filter,
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+
+        onDispose {
+            context.unregisterReceiver(receiver)
+        }
+    }
+
+
 
     Scaffold(
         containerColor = grayBackground,
@@ -82,7 +129,6 @@ fun CreateRoomScreen(navController: NavController, vm: RoomListViewModel = viewM
             )
         }
     ) { padding ->
-
         Column(
             modifier = Modifier
                 .padding(padding)
@@ -169,11 +215,29 @@ fun CreateRoomScreen(navController: NavController, vm: RoomListViewModel = viewM
                 }
             }
 
-            var selectedPlace by remember { mutableStateOf("尚未選擇麻將館") }
-
+            // ------------------------
+            // ▼ 選擇麻將館（Google Maps）
+            // ------------------------
             Button(
                 onClick = {
-                    // TODO: 啟動 Google 地圖地點選擇
+                    // 啟動 Google Places 自動完成搜尋
+                    val fields = listOf(
+                        com.google.android.libraries.places.api.model.Place.Field.NAME,
+                        com.google.android.libraries.places.api.model.Place.Field.ADDRESS
+                    )
+
+                    val intent = com.google.android.libraries.places.widget.Autocomplete.IntentBuilder(
+                        com.google.android.libraries.places.widget.model.AutocompleteActivityMode.OVERLAY,
+                        fields
+                    )
+                        .setCountries(listOf("TW")) // 限定台灣
+                        .setHint("搜尋麻將館、娛樂館、場所")
+                        .build(context)
+
+                    (context as? Activity)?.startActivityForResult(
+                        intent,
+                        MainActivity.REQUEST_CODE_AUTOCOMPLETE
+                    )
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -185,21 +249,53 @@ fun CreateRoomScreen(navController: NavController, vm: RoomListViewModel = viewM
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Icon(
-                    imageVector = Icons.Filled.Map,
-                    contentDescription = "地圖",
+                    imageVector = Icons.Default.LocationOn,
+                    contentDescription = "選擇麻將館",
                     modifier = Modifier.size(24.dp)
                 )
                 Spacer(Modifier.width(8.dp))
-                Text("選擇麻將館", fontSize = 18.sp, fontWeight = FontWeight.Bold,)
+                Text("選擇麻將館", fontSize = 18.sp, fontWeight = FontWeight.Bold)
             }
 
-            // 顯示選取結果
-            Text(
-                text = "目前選擇：$selectedPlace",
-                fontSize = 20.sp,
-                color = Color.DarkGray,
-                modifier = Modifier.padding(top = 8.dp)
-            )
+            // 顯示結果
+            if (selectedPlaceName.isNotEmpty()) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.dp, Color(0xFFBDBDBD))
+                ) {
+                    Text(
+                        text = "$selectedPlaceName（$selectedPlaceAddress）",
+                        fontSize = 15.sp,
+                        color = Color.DarkGray,
+                        modifier = Modifier.padding(12.dp),
+                        textAlign = TextAlign.Center
+                    )
+                }
+            } else {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF5F5F5)),
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.dp, Color(0xFFBDBDBD))
+                ) {
+                    Text(
+                        text = "尚未選擇麻將館",
+                        fontSize = 15.sp,
+                        color = Color.Gray,
+                        modifier = Modifier.padding(12.dp),
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+
+
+
 
 
             // 麻將規則：底分／台分
@@ -367,36 +463,58 @@ fun CreateRoomScreen(navController: NavController, vm: RoomListViewModel = viewM
                 )
             }
 
-            // ▼ 時間輸入與建立按鈕 ▼
-            val context = LocalContext.current
+            // ▼ 日期 + 時間輸入與建立按鈕 ▼
             val calendar = remember { java.util.Calendar.getInstance() }
 
             Box(modifier = Modifier.fillMaxWidth()) {
                 OutlinedTextField(
-                    value = if (time.isNotEmpty()) time else "選擇時間",
+                    value = if (time.isNotEmpty()) time else "選擇日期與時間",
                     onValueChange = {},
-                    label = { Text("時間") },
                     modifier = Modifier.fillMaxWidth(),
                     readOnly = true,
                     trailingIcon = {
                         IconButton(onClick = {
-                            val hour = calendar.get(java.util.Calendar.HOUR_OF_DAY)
-                            val minute = calendar.get(java.util.Calendar.MINUTE)
+                            // Step 1️⃣：選擇日期
+                            val year = calendar.get(java.util.Calendar.YEAR)
+                            val month = calendar.get(java.util.Calendar.MONTH)
+                            val day = calendar.get(java.util.Calendar.DAY_OF_MONTH)
 
-                            android.app.TimePickerDialog(
+
+                            val datePicker: android.app.DatePickerDialog = android.app.DatePickerDialog(
                                 context,
-                                { _, selectedHour, selectedMinute ->
-                                    val formatted = String.format("%02d:%02d", selectedHour, selectedMinute)
-                                    time = formatted
+                                { _, selectedYear, selectedMonth, selectedDay ->
+                                    // Step 2️⃣：再選時間
+                                    val hour = calendar.get(java.util.Calendar.HOUR_OF_DAY)
+                                    val minute = calendar.get(java.util.Calendar.MINUTE)
+
+                                    android.app.TimePickerDialog(
+                                        context,
+                                        { _, selectedHour, selectedMinute ->
+                                            val formatted = String.format(
+                                                "%04d年%02d月%02d日 %02d:%02d",
+                                                selectedYear,
+                                                selectedMonth + 1,
+                                                selectedDay,
+                                                selectedHour,
+                                                selectedMinute
+                                            )
+                                            time = formatted
+                                        },
+                                        hour,
+                                        minute,
+                                        true
+                                    ).show()
                                 },
-                                hour,
-                                minute,
-                                true
-                            ).show()
+                                year,
+                                month,
+                                day
+                            )
+                            datePicker.datePicker.minDate = System.currentTimeMillis()
+                            datePicker.show()
                         }) {
                             Icon(
                                 imageVector = Icons.Filled.ArrowDropDown,
-                                contentDescription = "選擇時間",
+                                contentDescription = "選擇日期與時間",
                                 tint = Color.DarkGray
                             )
                         }
@@ -408,22 +526,44 @@ fun CreateRoomScreen(navController: NavController, vm: RoomListViewModel = viewM
                     modifier = Modifier
                         .matchParentSize()
                         .clickable {
-                            val hour = calendar.get(java.util.Calendar.HOUR_OF_DAY)
-                            val minute = calendar.get(java.util.Calendar.MINUTE)
+                            val year = calendar.get(java.util.Calendar.YEAR)
+                            val month = calendar.get(java.util.Calendar.MONTH)
+                            val day = calendar.get(java.util.Calendar.DAY_OF_MONTH)
 
-                            android.app.TimePickerDialog(
+                            val datePicker: android.app.DatePickerDialog = android.app.DatePickerDialog(
                                 context,
-                                { _, selectedHour, selectedMinute ->
-                                    val formatted = String.format("%02d:%02d", selectedHour, selectedMinute)
-                                    time = formatted
+                                { _, selectedYear, selectedMonth, selectedDay ->
+                                    val hour = calendar.get(java.util.Calendar.HOUR_OF_DAY)
+                                    val minute = calendar.get(java.util.Calendar.MINUTE)
+
+                                    android.app.TimePickerDialog(
+                                        context,
+                                        { _, selectedHour, selectedMinute ->
+                                            val formatted = String.format(
+                                                "%04d年%02d月%02d日 %02d:%02d",
+                                                selectedYear,
+                                                selectedMonth + 1,
+                                                selectedDay,
+                                                selectedHour,
+                                                selectedMinute
+                                            )
+                                            time = formatted
+                                        },
+                                        hour,
+                                        minute,
+                                        true
+                                    ).show()
                                 },
-                                hour,
-                                minute,
-                                true
-                            ).show()
+                                year,
+                                month,
+                                day
+                            )
+                            datePicker.datePicker.minDate = System.currentTimeMillis()
+                            datePicker.show()
                         }
                 )
             }
+
 
 
 
