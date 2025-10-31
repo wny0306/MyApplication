@@ -109,4 +109,7 @@ dependencies {
 
     // Ktor Client Engine
     implementation("io.ktor:ktor-client-okhttp:2.3.5")
+
+    implementation("com.linecorp.linesdk:linesdk:5.8.0")
+
 }

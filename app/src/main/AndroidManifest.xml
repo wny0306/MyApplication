@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <application
         android:name=".App"
@@ -8,7 +10,8 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.MyApplication">
+        android:theme="@style/Theme.MyApplication"
+        tools:replace="android:allowBackup">
 
         <activity
             android:name=".MainActivity"
@@ -20,6 +23,20 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- LINE Login 所需的回呼設定 -->
+        <activity
+            android:name="com.linecorp.linesdk.auth.internal.LineAuthenticationActivity"
+            android:launchMode="singleTask"
+            tools:replace="android:launchMode">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="line3rdpartylogin" android:host="callback" />
+            </intent-filter>
+        </activity>
+
     </application>
 
 </manifest>
