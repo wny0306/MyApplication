@@ -1,9 +1,11 @@
 package com.example.myapplication.feature.auth
 
 import android.content.Intent
+import android.os.Build
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -25,16 +27,18 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.example.myapplication.R
 import com.linecorp.linesdk.auth.LineLoginApi
-import com.linecorp.linesdk.auth.LineLoginResult
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import com.linecorp.linesdk.auth.LineAuthenticationParams
 import com.linecorp.linesdk.Scope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import java.net.URL
+import java.net.HttpURLConnection
+import android.net.Uri
 
-
-
-
-
+@RequiresApi(Build.VERSION_CODES.TIRAMISU)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
@@ -62,12 +66,44 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
             when (code) {
                 "SUCCESS" -> {
                     val profile = loginResult.lineProfile
-                    val token = loginResult.lineCredential?.accessToken?.tokenString
-                    Log.d("LINE_LOGIN", "成功登入：${profile?.displayName} / ${profile?.userId}")
+                    val userId = profile?.userId ?: ""
+                    val displayName = profile?.displayName ?: ""
+                    val pictureUrl = profile?.pictureUrl ?: ""
+
+                    // ✅ 將資料上傳到你的 PHP 伺服器
+                    // ✅ 將資料上傳到你的 PHP 伺服器
+                    CoroutineScope(Dispatchers.IO).launch {
+                        try {
+                            val url = URL("http://59.127.30.235:85/api/api_line_login.php")
+
+
+                            // 👇 指定使用 Charset 版本
+                            val encodedName = Uri.encode(displayName).toString()
+                            val encodedPic = Uri.encode(pictureUrl.toString())
+                            val postData = "userId=$userId&displayName=$encodedName&pictureUrl=$encodedPic"
+
+                            val conn = (url.openConnection() as HttpURLConnection).apply {
+                                requestMethod = "POST"
+                                doOutput = true
+                                outputStream.write(postData.toByteArray())
+                            }
+
+                            val response = conn.inputStream.bufferedReader().readText()
+                            Log.d("LINE_DB", "伺服器回應：$response")
+
+                        } catch (e: Exception) {
+                            Log.e("LINE_DB", "上傳失敗: ${e.message}")
+                        }
+                    }
+
                     navController.navigate("home")
                 }
-                "CANCEL" -> Log.d("LINE_LOGIN", "使用者取消登入")
-                else -> Log.e("LINE_LOGIN", "登入失敗: ${loginResult.errorData.message}")
+                "CANCEL" -> {
+                    Log.d("LINE_LOGIN", "使用者取消登入")
+                }
+                else -> {
+                    Log.e("LINE_LOGIN", "登入失敗: ${loginResult.errorData.message}")
+                }
             }
         } catch (e: Exception) {
             Log.e("LINE_LOGIN", "例外：${e.stackTraceToString()}")
@@ -116,7 +152,9 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
                 value = username,
                 onValueChange = { username = it },
                 label = { Text("帳號") },
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp)
             )
             OutlinedTextField(
                 value = password,
@@ -131,12 +169,16 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
                         )
                     }
                 },
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp)
             )
 
             Button(
                 onClick = { vm.signIn(ctx, username, password) { navController.navigate("home") } },
-                modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant,
                     contentColor = Color.DarkGray
