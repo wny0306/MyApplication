@@ -109,7 +109,10 @@ dependencies {
 
     // Ktor Client Engine
     implementation("io.ktor:ktor-client-okhttp:2.3.5")
-
-    implementation("com.linecorp.linesdk:linesdk:5.8.0")
-
+    //google
+    implementation("com.google.android.libraries.places:places:3.3.0")
+    implementation("androidx.appcompat:appcompat:1.6.1")
+    implementation("com.google.android.libraries.places:places:3.3.0")
+    implementation("androidx.activity:activity-compose:1.8.2")
+    implementation("androidx.core:core-ktx:1.12.0"
 }
