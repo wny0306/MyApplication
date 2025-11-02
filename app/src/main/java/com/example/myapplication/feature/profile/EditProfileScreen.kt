@@ -1,11 +1,8 @@
 package com.example.myapplication.feature.profile
 
 import android.annotation.SuppressLint
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
@@ -24,19 +21,16 @@ fun EditProfileScreen(navController: NavController, vm: ProfileViewModel = viewM
     LaunchedEffect(Unit) { vm.load(ctx) }
 
     var nickname by remember { mutableStateOf("") }
-    var bio by remember { mutableStateOf("") }
 
-    // 初始化輸入框的值（只做一次）
-    val loaded by remember { mutableStateOf(true) }
-    if (loaded) {
+    // 初始化
+    LaunchedEffect(vm.nickname.value) {
         nickname = vm.nickname.value
-        bio = vm.bio.value
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("編輯個人資料") },
+                title = { Text("編輯暱稱") },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "返回")
@@ -46,7 +40,10 @@ fun EditProfileScreen(navController: NavController, vm: ProfileViewModel = viewM
         }
     ) { padding ->
         Column(
-            modifier = Modifier.padding(padding).fillMaxSize().padding(24.dp),
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
             OutlinedTextField(
@@ -55,20 +52,18 @@ fun EditProfileScreen(navController: NavController, vm: ProfileViewModel = viewM
                 label = { Text("暱稱") },
                 modifier = Modifier.fillMaxWidth()
             )
-            OutlinedTextField(
-                value = bio,
-                onValueChange = { bio = it },
-                label = { Text("自我介紹") },
-                modifier = Modifier.fillMaxWidth(),
-                maxLines = 5
-            )
+
             Button(
                 onClick = {
-                    vm.save(ctx, nickname, bio)
+                    vm.save(ctx, nickname)
                     navController.popBackStack()
                 },
-                modifier = Modifier.fillMaxWidth()
-            ) { Text("儲存") }
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp)
+
+            ) {
+                Text("儲存")
+            }
         }
     }
 }

@@ -14,13 +14,13 @@ import com.example.myapplication.feature.home.HomeScreen
 import com.example.myapplication.feature.home.RoomListViewModel
 import com.example.myapplication.feature.profile.EditProfileScreen
 import com.example.myapplication.feature.profile.ProfileScreen
+import com.example.myapplication.feature.profile.MatchHistoryScreen      // 🆕 新增
+import com.example.myapplication.feature.profile.CreateHistoryScreen     // 🆕 新增
 import com.example.myapplication.feature.roomdetail.RoomDetailScreen
-
 
 @Composable
 fun AppNavGraph() {
     val navController = rememberNavController()
-    // 建立一次共用的 ViewModel
     val roomListViewModel: RoomListViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
 
     NavHost(navController = navController, startDestination = Routes.Main.path) {
@@ -31,6 +31,10 @@ fun AppNavGraph() {
         composable(Routes.CreateRoom.path) { CreateRoomScreen(navController, roomListViewModel) }
         composable(Routes.Profile.path) { ProfileScreen(navController) }
         composable(Routes.EditProfile.path) { EditProfileScreen(navController) }
+
+        // 🆕 新增兩個空白頁面路由
+        composable("matchHistory") { MatchHistoryScreen(navController) }
+        composable("createHistory") { CreateHistoryScreen(navController) }
 
         composable(
             route = Routes.RoomDetail.path,
