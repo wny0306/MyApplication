@@ -16,15 +16,25 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.DoorFront
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.navigation.NavController
+import com.example.myapplication.domain.model.MahjongRoom
 import com.example.myapplication.navigation.Routes
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+
 
 
 @RequiresApi(Build.VERSION_CODES.Q)
@@ -32,11 +42,16 @@ import com.example.myapplication.navigation.Routes
 @Composable
 fun HomeScreen(navController: NavController, vm: RoomListViewModel) {
     val roomList by vm.rooms.collectAsState()
-
     var showPicker by remember { mutableStateOf(false) }
     var selectedCity by remember { mutableStateOf("全台") }
 
     LaunchedEffect(selectedCity) { vm.onCitySelected(selectedCity) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            vm.fetchRooms()
+            delay(30_000) // 30 秒
+        }
+    }
 
     val cityList = listOf(
         "全台", "台北市", "新北市", "基隆市", "桃園市", "新竹市", "新竹縣", "苗栗縣", "台中市",
@@ -106,30 +121,7 @@ fun HomeScreen(navController: NavController, vm: RoomListViewModel) {
             modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)
         ) {
             items(roomList, key = { it.id }) { room ->
-                Card(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
-                        .clickable {
-                            Log.d("Home", "navigate to ${room.id}")
-                            navController.navigate(Routes.RoomDetail.create(room.id))
-                        },
-                    colors = CardDefaults.cardColors(containerColor = Color.LightGray.copy(alpha = 0.6f))
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            Icons.Default.Person, null,
-                            Modifier.size(48.dp).padding(end = 16.dp), tint = grayDark
-                        )
-                        Column {
-                            Text(room.title, fontSize = 18.sp)
-                            Text("${room.people}人　花:${if (room.flower) "有" else "無"}")
-                            Text("時間：${room.time}", fontSize = 12.sp, color = Color.Gray)
-                            Text("地點：${room.location}", fontSize = 12.sp, color = Color.Gray)
-                        }
-                    }
-                }
+                RoomCard(room = room, navController = navController, grayDark = grayDark)
             }
         }
     }
@@ -243,4 +235,83 @@ fun CityPickerDialog(
         },
         containerColor = Color.Transparent
     )
+}
+
+@Composable
+fun RoomCard(
+    room: MahjongRoom,
+    navController: NavController,
+    grayDark: Color = Color(0xFF424242)
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp)
+            .clickable {
+                Log.d("Home", "navigate to ${room.id}")
+                navController.navigate(Routes.RoomDetail.create(room.id))
+            },
+        colors = CardDefaults.cardColors(containerColor = Color.LightGray.copy(alpha = 0.6f))
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Default.Person, null,
+                Modifier
+                    .size(48.dp)
+                    .padding(end = 16.dp),
+                tint = grayDark
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                // 🧩 左邊：地點 + 日期時間
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = room.location.takeIf { it.isNotEmpty() } ?: "未知地點",
+                        fontSize = 18.sp,
+                        color = Color.Black,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.widthIn(max = 180.dp)
+                    )
+                    Text(
+                        text = "${room.date ?: "未設定"} ${room.time ?: ""}",
+                        fontSize = 18.sp,
+                        color = Color.Black
+                    )
+                    Text(
+                        text = "目前 ${room.memberCount}/${room.people} 人",
+                        fontSize = 16.sp,
+                        color = Color.DarkGray
+                    )
+                }
+
+                // 🧮 右邊：底分 / 台數 + 將數
+                Column(
+                    horizontalAlignment = Alignment.End
+                ) {
+                    Text(
+                        text = "${room.basePoint}/${room.taiPoint}",
+                        fontSize = 28.sp,
+                        color = Color.Black,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "${room.rounds}將",
+                        fontSize = 22.sp,
+                        color = Color.Black
+                    )
+                }
+            }
+        }
+    }
 }

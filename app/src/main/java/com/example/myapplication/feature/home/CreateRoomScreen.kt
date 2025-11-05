@@ -8,7 +8,9 @@ import android.content.IntentFilter
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
@@ -28,7 +30,9 @@ import io.github.jan.supabase.gotrue.auth
 import kotlinx.coroutines.launch
 import java.util.UUID
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.core.content.ContextCompat
@@ -38,9 +42,20 @@ import com.example.myapplication.MainActivity
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreateRoomScreen(navController: NavController, vm: RoomListViewModel = viewModel()) {
+    // ▼ 麻將規則 ▼
     var title by remember { mutableStateOf("") }
-    var flowerHas by remember { mutableStateOf(false) }
+    var date by remember { mutableStateOf("") }
     var time by remember { mutableStateOf("") }
+    var showRuleDialog by remember { mutableStateOf(false) }
+    var mahjongRounds by remember { mutableStateOf("") }
+    var flower by remember { mutableStateOf(false) }
+    var ligu by remember { mutableStateOf(false) }
+    var diceRule by remember { mutableStateOf(false) }
+    var basePoint by remember { mutableStateOf(30) }
+    var taiPoint by remember { mutableStateOf(10) }
+    var location by remember { mutableStateOf("") }
+    var note by remember { mutableStateOf("") }
+    val calendar = remember { java.util.Calendar.getInstance() }
 
     // ▼ 城市選擇 ▼
     var expanded by remember { mutableStateOf(false) }
@@ -52,23 +67,16 @@ fun CreateRoomScreen(navController: NavController, vm: RoomListViewModel = viewM
         "台東縣", "澎湖縣", "金門縣", "連江縣"
     )
 
+    //顏色設定
     val scope = rememberCoroutineScope()
     val grayBackground = Color(0xFFF5F5F5)
     val grayPrimary = Color(0xFFBDBDBD)
     val grayDark = Color(0xFF424242)
 
-    // ▼ 麻將規則 ▼
-    var showRuleDialog by remember { mutableStateOf(false) }
-    var mahjongRounds by remember { mutableStateOf("") }
-    var flower by remember { mutableStateOf(false) }
-    var ligu by remember { mutableStateOf(false) }
-    var diceRule by remember { mutableStateOf(false) }
-
     // ▼ Google Places 選擇麻將館 ▼
     val context = LocalContext.current
     var selectedPlaceName by remember { mutableStateOf("") }
     var selectedPlaceAddress by remember { mutableStateOf("") }
-
 
     // 監聽 MainActivity 廣播，接收地點結果
     DisposableEffect(context) {
@@ -76,6 +84,7 @@ fun CreateRoomScreen(navController: NavController, vm: RoomListViewModel = viewM
             override fun onReceive(ctx: Context?, intent: Intent?) {
                 selectedPlaceName = intent?.getStringExtra("name") ?: ""
                 selectedPlaceAddress = intent?.getStringExtra("address") ?: ""
+                location = selectedPlaceName
                 println("✅ Compose接收到廣播：$selectedPlaceName / $selectedPlaceAddress")
                 android.util.Log.d("PlacesDebug", "✅ Compose 接收到廣播：$selectedPlaceName / $selectedPlaceAddress")
             }
@@ -87,7 +96,12 @@ fun CreateRoomScreen(navController: NavController, vm: RoomListViewModel = viewM
             context.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
         } else {
             @Suppress("DEPRECATION")
-            context.registerReceiver(receiver, filter)
+            ContextCompat.registerReceiver(
+                context,
+                receiver,
+                filter,
+                ContextCompat.RECEIVER_NOT_EXPORTED
+            )
         }
 
         // ✅ 使用 ContextCompat，支援所有版本
@@ -127,17 +141,63 @@ fun CreateRoomScreen(navController: NavController, vm: RoomListViewModel = viewM
                     titleContentColor = grayDark
                 )
             )
+        },
+        bottomBar = {
+            BottomAppBar(
+                containerColor = Color.White,
+                tonalElevation = 8.dp
+            ) {
+                Button(
+                    onClick = {
+                        scope.launch {
+                            val currentUserId = App.supabase.auth.currentUserOrNull()?.id
+                            vm.createRoom(
+                                MahjongRoom(
+                                    id = UUID.randomUUID().toString(),
+                                    title = title.ifEmpty { "未命名房間" },
+                                    ownerId = currentUserId ?: "1",
+                                    people = 4,
+                                    flower = flower,
+                                    date = date.ifEmpty { "未設定日期" },
+                                    time = time.ifEmpty { "未設定時間" },
+                                    city = selectedCity,
+                                    location = if (selectedPlaceName.isNotEmpty()) selectedPlaceName else selectedCity,
+                                    rounds = mahjongRounds.toIntOrNull() ?: 4,
+                                    diceRule = diceRule,
+                                    ligu = ligu,
+                                    basePoint = basePoint,
+                                    taiPoint = taiPoint,
+                                    note = note,
+                                    createdAt = null,
+                                    updatedAt = null
+                                )
+                            )
+                            navController.popBackStack()
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .height(56.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = grayPrimary,
+                        contentColor = grayDark
+                    )
+                ) {
+                    Text("建立房間", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                }
+            }
         }
     ) { padding ->
         Column(
             modifier = Modifier
                 .padding(padding)
                 .padding(horizontal = 32.dp, vertical = 24.dp)
-                .fillMaxSize(),
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-
             // ▼ 城市選擇 ▼
             Box(modifier = Modifier.fillMaxWidth()) {
                 OutlinedTextField(
@@ -293,10 +353,6 @@ fun CreateRoomScreen(navController: NavController, vm: RoomListViewModel = viewM
                     )
                 }
             }
-
-
-
-
 
             // 麻將規則：底分／台分
             Row(
@@ -463,65 +519,19 @@ fun CreateRoomScreen(navController: NavController, vm: RoomListViewModel = viewM
                 )
             }
 
-            // ▼ 日期 + 時間輸入與建立按鈕 ▼
-            val calendar = remember { java.util.Calendar.getInstance() }
-
+            // 🗓️ 選擇日期
             Box(modifier = Modifier.fillMaxWidth()) {
                 OutlinedTextField(
-                    value = if (time.isNotEmpty()) time else "選擇日期與時間",
+                    value = if (date.isNotEmpty()) date else "選擇日期",
                     onValueChange = {},
                     modifier = Modifier.fillMaxWidth(),
                     readOnly = true,
                     trailingIcon = {
-                        IconButton(onClick = {
-                            // Step 1️⃣：選擇日期
-                            val year = calendar.get(java.util.Calendar.YEAR)
-                            val month = calendar.get(java.util.Calendar.MONTH)
-                            val day = calendar.get(java.util.Calendar.DAY_OF_MONTH)
-
-
-                            val datePicker: android.app.DatePickerDialog = android.app.DatePickerDialog(
-                                context,
-                                { _, selectedYear, selectedMonth, selectedDay ->
-                                    // Step 2️⃣：再選時間
-                                    val hour = calendar.get(java.util.Calendar.HOUR_OF_DAY)
-                                    val minute = calendar.get(java.util.Calendar.MINUTE)
-
-                                    android.app.TimePickerDialog(
-                                        context,
-                                        { _, selectedHour, selectedMinute ->
-                                            val formatted = String.format(
-                                                "%04d年%02d月%02d日 %02d:%02d",
-                                                selectedYear,
-                                                selectedMonth + 1,
-                                                selectedDay,
-                                                selectedHour,
-                                                selectedMinute
-                                            )
-                                            time = formatted
-                                        },
-                                        hour,
-                                        minute,
-                                        true
-                                    ).show()
-                                },
-                                year,
-                                month,
-                                day
-                            )
-                            datePicker.datePicker.minDate = System.currentTimeMillis()
-                            datePicker.show()
-                        }) {
-                            Icon(
-                                imageVector = Icons.Filled.ArrowDropDown,
-                                contentDescription = "選擇日期與時間",
-                                tint = Color.DarkGray
-                            )
-                        }
+                        Icon(Icons.Filled.CalendarMonth, contentDescription = "選擇日期", tint = Color.DarkGray)
                     }
                 )
 
-                // 🟢 透明可點擊層，覆蓋整個 TextField
+                // ✅ 透明點擊層
                 Box(
                     modifier = Modifier
                         .matchParentSize()
@@ -530,71 +540,67 @@ fun CreateRoomScreen(navController: NavController, vm: RoomListViewModel = viewM
                             val month = calendar.get(java.util.Calendar.MONTH)
                             val day = calendar.get(java.util.Calendar.DAY_OF_MONTH)
 
-                            val datePicker: android.app.DatePickerDialog = android.app.DatePickerDialog(
+                            android.app.DatePickerDialog(
                                 context,
-                                { _, selectedYear, selectedMonth, selectedDay ->
-                                    val hour = calendar.get(java.util.Calendar.HOUR_OF_DAY)
-                                    val minute = calendar.get(java.util.Calendar.MINUTE)
-
-                                    android.app.TimePickerDialog(
-                                        context,
-                                        { _, selectedHour, selectedMinute ->
-                                            val formatted = String.format(
-                                                "%04d年%02d月%02d日 %02d:%02d",
-                                                selectedYear,
-                                                selectedMonth + 1,
-                                                selectedDay,
-                                                selectedHour,
-                                                selectedMinute
-                                            )
-                                            time = formatted
-                                        },
-                                        hour,
-                                        minute,
-                                        true
-                                    ).show()
+                                { _, y, m, d ->
+                                    date = String.format("%04d-%02d-%02d", y, m + 1, d)
                                 },
-                                year,
-                                month,
-                                day
-                            )
-                            datePicker.datePicker.minDate = System.currentTimeMillis()
-                            datePicker.show()
+                                year, month, day
+                            ).apply {
+                                datePicker.minDate = System.currentTimeMillis()
+                            }.show()
+                        }
+                )
+            }
+
+            // 🕒 選擇時間
+            Box(modifier = Modifier.fillMaxWidth()) {
+                OutlinedTextField(
+                    value = if (time.isNotEmpty()) time else "選擇時間",
+                    onValueChange = {},
+                    modifier = Modifier.fillMaxWidth(),
+                    readOnly = true,
+                    trailingIcon = {
+                        Icon(Icons.Filled.Schedule, contentDescription = "選擇時間", tint = Color.DarkGray)
+                    }
+                )
+
+                // ✅ 透明點擊層
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .clickable {
+                            val hour = calendar.get(java.util.Calendar.HOUR_OF_DAY)
+                            val minute = calendar.get(java.util.Calendar.MINUTE)
+
+                            android.app.TimePickerDialog(
+                                context,
+                                { _, h, m ->
+                                    time = String.format("%02d:%02d", h, m)
+                                },
+                                hour, minute, true
+                            ).show()
                         }
                 )
             }
 
 
-
-
-            Spacer(Modifier.height(32.dp))
-
-            Button(
-                onClick = {
-                    scope.launch {
-                        val currentUserId = App.supabase.auth.currentUserOrNull()?.id
-                        vm.create(
-                            MahjongRoom(
-                                id = UUID.randomUUID().toString(),
-                                title = title,
-                                ownerId = currentUserId.toString(),
-                                people = 4,
-                                flower = flowerHas,
-                                time = time,
-                                location = selectedCity
-                            )
-                        )
-                        navController.popBackStack()
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = grayPrimary,
-                    contentColor = grayDark
+            // ▼ 房主備註 ▼
+            OutlinedTextField(
+                value = note,
+                onValueChange = { note = it },
+                label = { Text("房主備註（選填）") },
+                placeholder = { Text("例如：記得帶麻將牌 / 有吃飯再開打") },
+                modifier = Modifier
+                    .fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                maxLines = 3,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Color(0xFF2196F3),
+                    unfocusedBorderColor = Color.Gray
                 )
-            ) {
-                Text("建立", fontSize = 18.sp, fontWeight = FontWeight.Bold)
-            }
+            )
+
         }
     }
 }

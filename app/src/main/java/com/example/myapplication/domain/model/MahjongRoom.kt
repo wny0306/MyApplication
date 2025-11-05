@@ -7,23 +7,47 @@ data class MahjongRoom(
     val id: String = UUID.randomUUID().toString(),
     val title: String,
     val ownerId: String,
+    val ownerName: String? = null,
     val people: Int,
     val flower: Boolean,
+    val date: String,
     val time: String,
-    val location: String
+    val city: String,
+    val location: String,
+    val rounds: Int,
+    val diceRule: Boolean,
+    val ligu: Boolean,
+    val basePoint: Int,
+    val taiPoint: Int,
+    val note: String? = "",
+    val createdAt: String? = null,
+    val updatedAt: String? = null,
+    val members: List<Member> = emptyList(),
+    val memberCount: Int = 0
 )
 
-// DTO → Domain
+// ✅ DTO → Domain
 fun RoomDto.toDomain() = MahjongRoom(
     id = id,
     title = title,
     ownerId = owner_id,
+    ownerName = owner_name,
     people = people,
     flower = flower,
+    date = date,
     time = time,
-    location = location
+    city = city,
+    location = location,
+    rounds = rounds,
+    diceRule = dice_rule,
+    ligu = ligu,
+    basePoint = base_point,
+    taiPoint = tai_point,
+    note = note,
+    members = members ?: emptyList(),
+    createdAt = created_at,
+    updatedAt = updated_at
 )
-
 // Domain → DTO
 fun MahjongRoom.toDto() = RoomDto(
     id = id,
@@ -31,6 +55,17 @@ fun MahjongRoom.toDto() = RoomDto(
     owner_id = ownerId,
     people = people,
     flower = flower,
+    date = date,
     time = time,
-    location = location
+    city = city,
+    location = location,
+    rounds = rounds,
+    dice_rule = diceRule,
+    ligu = ligu,
+    base_point = basePoint,
+    tai_point = taiPoint,
+    note = note,
+    created_at = createdAt,
+    updated_at = updatedAt
 )
+

@@ -8,7 +8,8 @@ sealed class Routes(val path: String) {
     data object CreateRoom : Routes("createRoom")
     data object Profile : Routes("profile")
     data object EditProfile : Routes("editProfile")
-    data object RoomDetail : Routes("detail/{roomId}") {
-        fun create(id: String) = "detail/$id"
+    data object RoomDetail {
+        const val route = "roomDetail/{roomId}"
+        fun create(roomId: String) = "roomDetail/$roomId"
     }
 }
