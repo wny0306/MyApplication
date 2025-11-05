@@ -8,14 +8,15 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.myapplication.feature.auth.LoginScreen
 import com.example.myapplication.feature.auth.SignUpScreen
+import com.example.myapplication.feature.auth.SplashScreen
 import com.example.myapplication.feature.common.MainScreen
 import com.example.myapplication.feature.home.CreateRoomScreen
 import com.example.myapplication.feature.home.HomeScreen
 import com.example.myapplication.feature.home.RoomListViewModel
 import com.example.myapplication.feature.profile.EditProfileScreen
 import com.example.myapplication.feature.profile.ProfileScreen
-import com.example.myapplication.feature.profile.MatchHistoryScreen      // 🆕 新增
-import com.example.myapplication.feature.profile.CreateHistoryScreen     // 🆕 新增
+import com.example.myapplication.feature.profile.MatchHistoryScreen
+import com.example.myapplication.feature.profile.CreateHistoryScreen
 import com.example.myapplication.feature.roomdetail.RoomDetailScreen
 
 @Composable
@@ -23,16 +24,19 @@ fun AppNavGraph() {
     val navController = rememberNavController()
     val roomListViewModel: RoomListViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
 
-    NavHost(navController = navController, startDestination = Routes.Main.path) {
-        composable(Routes.Main.path) { MainScreen(navController) }
+    NavHost(
+        navController = navController,
+        startDestination = "splash" // ✅ 修改：啟動先進入 SplashScreen
+    ) {
+        composable("splash") { SplashScreen(navController) }
+
         composable(Routes.Login.path) { LoginScreen(navController) }
         composable(Routes.SignUp.path) { SignUpScreen(navController) }
+        composable(Routes.Main.path) { MainScreen(navController) }
         composable(Routes.Home.path) { HomeScreen(navController, roomListViewModel) }
         composable(Routes.CreateRoom.path) { CreateRoomScreen(navController, roomListViewModel) }
         composable(Routes.Profile.path) { ProfileScreen(navController) }
         composable(Routes.EditProfile.path) { EditProfileScreen(navController) }
-
-        // 🆕 新增兩個空白頁面路由
         composable("matchHistory") { MatchHistoryScreen(navController) }
         composable("createHistory") { CreateHistoryScreen(navController) }
 
