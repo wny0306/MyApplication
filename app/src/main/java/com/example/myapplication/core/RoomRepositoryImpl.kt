@@ -284,5 +284,5 @@ class RoomRepositoryImpl(
     }
 
 
-    override fun currentUserId(): String? = "2"
+    override fun currentUserId(): String? = "1"
 }

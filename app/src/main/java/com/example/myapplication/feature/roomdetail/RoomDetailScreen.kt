@@ -313,10 +313,10 @@ fun RoomDetailScreen(
             text = {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("麻將設定", fontWeight = FontWeight.Bold, fontSize = 20.sp)
-                    Text("將數：${safeRoom.rounds}")
-                    Text("花牌：${if (safeRoom.flower) "有" else "無"}")
-                    Text("骰規：${if (safeRoom.diceRule) "有" else "無"}")
-                    Text("哩咕：${if (safeRoom.ligu) "有" else "無"}")
+                    Text("將數：${safeRoom.rounds}", fontSize = 20.sp)
+                    Text("花牌：${if (safeRoom.flower) "有" else "無"}", fontSize = 20.sp)
+                    Text("骰規：${if (safeRoom.diceRule) "有" else "無"}", fontSize = 20.sp)
+                    Text("哩咕：${if (safeRoom.ligu) "有" else "無"}", fontSize = 20.sp)
                 }
             }
         )
