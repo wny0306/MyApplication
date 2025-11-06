@@ -13,6 +13,7 @@ import com.example.myapplication.feature.common.MainScreen
 import com.example.myapplication.feature.home.CreateRoomScreen
 import com.example.myapplication.feature.home.HomeScreen
 import com.example.myapplication.feature.home.RoomListViewModel
+import com.example.myapplication.feature.profile.AboutScreen
 import com.example.myapplication.feature.profile.EditProfileScreen
 import com.example.myapplication.feature.profile.ProfileScreen
 import com.example.myapplication.feature.profile.MatchHistoryScreen
@@ -39,6 +40,8 @@ fun AppNavGraph() {
         composable(Routes.EditProfile.path) { EditProfileScreen(navController) }
         composable("matchHistory") { MatchHistoryScreen(navController) }
         composable("createHistory") { CreateHistoryScreen(navController) }
+        composable("about") { AboutScreen(navController) }
+
 
         composable(
             route = Routes.RoomDetail.route,
