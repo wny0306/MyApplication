@@ -7,16 +7,20 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -26,6 +30,8 @@ import com.example.myapplication.data.datasource.local.UserPreferences
 import com.linecorp.linesdk.Scope
 import com.linecorp.linesdk.auth.LineAuthenticationParams
 import com.linecorp.linesdk.auth.LineLoginApi
+import com.google.android.gms.auth.api.signin.*
+import com.google.android.gms.common.api.ApiException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -39,32 +45,57 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
     val ctx = LocalContext.current
     val prefs = remember { UserPreferences(ctx) }
     var devPassword by remember { mutableStateOf("") }
-
-    // 🧠 開發者密碼
     val developerPass = "1"
 
+    // ---------- Google Sign-In ----------
+    val gso = remember {
+        GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+            .requestIdToken("213521066881-nttt15ipnd5mg500oeu0an81bq7ejthf.apps.googleusercontent.com")
+            .requestEmail()
+            .build()
+    }
+    val googleSignInClient = remember { GoogleSignIn.getClient(ctx, gso) }
+
+    val googleLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+        try {
+            val account = task.getResult(ApiException::class.java)
+            val userId = account.id ?: ""
+            val displayName = account.displayName ?: "Google 使用者"
+            Log.d("GoogleLogin", "✅ 登入成功: $displayName")
+
+            CoroutineScope(Dispatchers.IO).launch {
+                prefs.saveUser(userId, displayName, "")
+            }
+            navController.navigate("home") {
+                popUpTo("login") { inclusive = true }
+            }
+        } catch (e: ApiException) {
+            Log.e("GoogleLogin", "❌ 登入失敗: ${e.statusCode}")
+        }
+    }
+
+    // ---------- LINE Login ----------
     val lineLoginLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
         try {
             val intentData = result.data ?: return@rememberLauncherForActivityResult
             val loginResult = LineLoginApi.getLoginResultFromIntent(intentData)
-            val code = loginResult.responseCode?.name ?: "UNKNOWN"
-
-            when (code) {
+            when (loginResult.responseCode?.name) {
                 "SUCCESS" -> {
                     val profile = loginResult.lineProfile
                     val userId = profile?.userId ?: ""
                     val displayName = profile?.displayName ?: ""
                     val pictureUrl = profile?.pictureUrl?.toString() ?: ""
 
-                    // ✅ 上傳到 PHP
                     CoroutineScope(Dispatchers.IO).launch {
                         try {
                             val url = URL("http://59.127.30.235:85/api/api_line_login.php")
-                            val encodedName = Uri.encode(displayName)
-                            val encodedPic = Uri.encode(pictureUrl)
-                            val postData = "userId=$userId&displayName=$encodedName&pictureUrl=$encodedPic"
+                            val postData =
+                                "userId=$userId&displayName=${Uri.encode(displayName)}&pictureUrl=${Uri.encode(pictureUrl)}"
                             val conn = (url.openConnection() as HttpURLConnection).apply {
                                 requestMethod = "POST"
                                 doOutput = true
@@ -76,11 +107,9 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
                         }
                     }
 
-                    // ✅ 儲存登入狀態
                     CoroutineScope(Dispatchers.IO).launch {
                         prefs.saveUser(userId, displayName, pictureUrl)
                     }
-
                     navController.navigate("home") {
                         popUpTo("login") { inclusive = true }
                     }
@@ -93,84 +122,138 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
         }
     }
 
-    Scaffold { padding ->
+    // ---------- UI ----------
+    Scaffold(containerColor = Color(0xFFF8F9FA)) { padding ->
         Column(
             Modifier
                 .padding(padding)
-                .padding(horizontal = 32.dp)
-                .padding(top = 150.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .fillMaxSize()
+                .background(Color(0xFFF8F9FA))
+                .padding(horizontal = 32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
-            Text(
-                text = "Link UP",
-                fontSize = 50.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.Gray,
-                modifier = Modifier.padding(bottom = 40.dp)
-            )
             Image(
                 painter = painterResource(id = R.drawable.shimilogo),
                 contentDescription = "App Logo",
                 modifier = Modifier
-                    .height(180.dp)
-                    .fillMaxWidth()
-                    .padding(bottom = 32.dp),
+                    .height(140.dp)
+                    .width(140.dp)
+                    .padding(bottom = 16.dp),
                 contentScale = ContentScale.Fit
             )
 
-            // ✅ 開發人員快速登入區塊
-            OutlinedTextField(
-                value = devPassword,
-                onValueChange = { devPassword = it },
-                label = { Text("開發者測試密碼") },
-                modifier = Modifier.fillMaxWidth()
+            Text(
+                text = "Link UP",
+                fontSize = 42.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF2E2E2E),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(bottom = 40.dp)
             )
+
+            // 共用按鈕樣式
+            val buttonHeight = 56.dp
+            val buttonShape = RoundedCornerShape(14.dp)
+
+            // Google 登入
             Button(
                 onClick = {
-                    if (devPassword == developerPass) {
-                        CoroutineScope(Dispatchers.IO).launch {
-                            prefs.saveUser("dev_user", "Developer", "")
-                            Log.d("AutoLogin", "✅ 使用開發者模式登入成功")
-                        }
-                        navController.navigate("home") {
-                            popUpTo("login") { inclusive = true }
-                        }
-                    } else {
-                        Log.e("AutoLogin", "❌ 開發者密碼錯誤")
-                    }
+                    val intent = googleSignInClient.signInIntent
+                    googleLauncher.launch(intent)
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 12.dp),
+                    .height(buttonHeight)
+                    .shadow(3.dp, buttonShape),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color.LightGray,
+                    containerColor = Color.White,
                     contentColor = Color.Black
-                )
+                ),
+                shape = buttonShape
             ) {
-                Text("開發者快速登入")
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.google),
+                        contentDescription = null,
+                        tint = Color.Unspecified,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text("使用 Google 登入", fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                }
             }
 
-            // ✅ LINE 登入按鈕
+            // LINE 登入（完全相同大小）
             Button(
                 onClick = {
-                    val loginIntent = LineLoginApi.getLoginIntent(
+                    val intent = LineLoginApi.getLoginIntent(
                         ctx,
                         "2008319508",
                         LineAuthenticationParams.Builder()
                             .scopes(listOf(Scope.PROFILE, Scope.OPENID_CONNECT))
                             .build()
                     )
-                    lineLoginLauncher.launch(loginIntent)
+                    lineLoginLauncher.launch(intent)
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 12.dp),
+                    .height(buttonHeight)
+                    .padding(top = 16.dp)
+                    .shadow(3.dp, buttonShape),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(0xFF06C755),
                     contentColor = Color.White
-                )
+                ),
+                shape = buttonShape
             ) {
-                Text("使用 LINE 登入")
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.line),
+                        contentDescription = null,
+                        tint = Color.Unspecified,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text("使用 LINE 登入", fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                }
+            }
+
+            // 開發者快速登入
+            OutlinedTextField(
+                value = devPassword,
+                onValueChange = { devPassword = it },
+                label = { Text("開發者測試密碼") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 28.dp)
+            )
+            Button(
+                onClick = {
+                    if (devPassword == developerPass) {
+                        CoroutineScope(Dispatchers.IO).launch {
+                            prefs.saveUser("dev_user", "Developer", "")
+                            Log.d("AutoLogin", "✅ 開發者模式登入成功")
+                        }
+                        navController.navigate("home") {
+                            popUpTo("login") { inclusive = true }
+                        }
+                    } else {
+                        Log.e("AutoLogin", "❌ 密碼錯誤")
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(buttonHeight)
+                    .padding(top = 12.dp)
+                    .shadow(2.dp, buttonShape),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFFE0E0E0),
+                    contentColor = Color(0xFF333333)
+                ),
+                shape = buttonShape
+            ) {
+                Text("開發者快速登入", fontSize = 16.sp, fontWeight = FontWeight.Medium)
             }
         }
     }

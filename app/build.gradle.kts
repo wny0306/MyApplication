@@ -121,6 +121,7 @@ dependencies {
     implementation("com.google.android.libraries.places:places:3.3.0")
     implementation("androidx.activity:activity-compose:1.8.2")
     implementation("androidx.core:core-ktx:1.12.0")
+    implementation("com.google.android.gms:play-services-auth:21.1.0")
 
     implementation("com.linecorp.linesdk:linesdk:5.8.0")
 
@@ -135,5 +136,7 @@ dependencies {
     // 🖼️ Coil 圖片載入 (for Compose)
     implementation("io.coil-kt:coil-compose:2.6.0")
 
+    //下拉刷新
+    implementation("com.google.accompanist:accompanist-swiperefresh:0.36.0")
 
 }
