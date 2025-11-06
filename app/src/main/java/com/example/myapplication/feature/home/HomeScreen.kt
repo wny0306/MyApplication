@@ -22,8 +22,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -35,8 +33,6 @@ import com.example.myapplication.navigation.Routes
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-
-
 @RequiresApi(Build.VERSION_CODES.Q)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,35 +40,25 @@ fun HomeScreen(navController: NavController, vm: RoomListViewModel) {
     val roomList by vm.rooms.collectAsState()
     var showPicker by remember { mutableStateOf(false) }
     var selectedCity by remember { mutableStateOf("全台") }
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(selectedCity) { vm.onCitySelected(selectedCity) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            vm.fetchRooms()
-            delay(30_000) // 30 秒
-        }
-    }
 
-    val cityList = listOf(
-        "全台", "台北市", "新北市", "基隆市", "桃園市", "新竹市", "新竹縣", "苗栗縣", "台中市",
-        "彰化縣", "南投縣", "雲林縣", "嘉義市", "嘉義縣", "台南市", "高雄市", "屏東縣",
-        "宜蘭縣", "花蓮縣", "台東縣", "澎湖縣", "金門縣", "連江縣"
-    )
-
-    val grayBackground = Color(0xFFF5F5F5)
-    val grayPrimary = Color(0xFFBDBDBD)
-    val grayDark = Color(0xFF424242)
+    // ✅ 下拉刷新相關狀態
+    val pullToRefreshState = rememberPullToRefreshState()
+    var isRefreshing by remember { mutableStateOf(false) }
 
     Scaffold(
-        containerColor = grayBackground,
+        containerColor = Color(0xFFF5F5F5),
         topBar = {
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = grayPrimary, titleContentColor = grayDark
+                    containerColor = Color(0xFFBDBDBD),
+                    titleContentColor = Color(0xFF424242)
                 ),
                 title = {
                     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        Text("LINK UP", fontSize = 40.sp, color = grayDark)
+                        Text("LINK UP", fontSize = 40.sp, color = Color(0xFF424242))
                     }
                 },
                 navigationIcon = {
@@ -85,7 +71,7 @@ fun HomeScreen(navController: NavController, vm: RoomListViewModel) {
                 },
                 actions = {
                     Button(
-                        onClick = { /* TODO: 分類 */ },
+                        onClick = { /* TODO: 分類功能 */ },
                         colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)
                     ) {
                         Text("分類", color = Color.DarkGray, fontSize = 20.sp)
@@ -94,17 +80,15 @@ fun HomeScreen(navController: NavController, vm: RoomListViewModel) {
             )
         },
         bottomBar = {
-            BottomAppBar(containerColor = grayPrimary, contentColor = grayDark) {
+            BottomAppBar(containerColor = Color(0xFFBDBDBD), contentColor = Color(0xFF424242)) {
                 Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.SpaceAround
                 ) {
-                    IconButton(onClick = { /* TODO */ }) {
-                        Icon(
-                            Icons.Default.DoorFront,
-                            contentDescription = "跳轉所在的房間",
-                            Modifier.size(48.dp)
-                        )
+                    IconButton(onClick = { /* TODO: 跳轉已加入房間 */ }) {
+                        Icon(Icons.Default.DoorFront, contentDescription = "跳轉所在的房間", Modifier.size(48.dp))
                     }
                     IconButton(onClick = { navController.navigate(Routes.CreateRoom.path) }) {
                         Icon(Icons.Default.Add, null, Modifier.size(48.dp))
@@ -116,20 +100,43 @@ fun HomeScreen(navController: NavController, vm: RoomListViewModel) {
             }
         }
     ) { padding ->
-        LazyColumn(
-            contentPadding = padding,
-            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)
+
+        // ✅ 下拉刷新區塊
+        PullToRefreshBox(
+            state = pullToRefreshState,
+            isRefreshing = isRefreshing,
+            onRefresh = {
+                scope.launch {
+                    isRefreshing = true
+                    vm.loadRooms()
+                    delay(800) // 小延遲讓動畫自然
+                    isRefreshing = false
+                }
+            },
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
         ) {
-            items(roomList, key = { it.id }) { room ->
-                RoomCard(room = room, navController = navController, grayDark = grayDark)
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp)
+            ) {
+                items(roomList, key = { it.id }) { room ->
+                    RoomCard(room = room, navController = navController, grayDark = Color(0xFF424242))
+                }
             }
         }
     }
 
-    // --- 城市選擇器 Dialog ---
+    // ✅ 城市選擇器
     if (showPicker) {
         CityPickerDialog(
-            cityList = cityList,
+            cityList = listOf(
+                "全台", "台北市", "新北市", "基隆市", "桃園市", "新竹市", "新竹縣", "苗栗縣",
+                "台中市", "彰化縣", "南投縣", "雲林縣", "嘉義市", "嘉義縣", "台南市",
+                "高雄市", "屏東縣", "宜蘭縣", "花蓮縣", "台東縣", "澎湖縣", "金門縣", "連江縣"
+            ),
             selectedCity = selectedCity,
             onConfirm = { city ->
                 selectedCity = city
@@ -162,7 +169,6 @@ fun CityPickerDialog(
                     .background(Color.White, RoundedCornerShape(16.dp))
                     .padding(vertical = 24.dp)
             ) {
-                // --- NumberPicker 區 ---
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -170,15 +176,12 @@ fun CityPickerDialog(
                         .padding(horizontal = 32.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    // 灰色選取框
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(48.dp)
                             .background(Color(0xFFCCCCCC), RoundedCornerShape(12.dp))
                     )
-
-                    // 原生 NumberPicker
                     AndroidView(
                         factory = { context ->
                             NumberPicker(context).apply {
@@ -190,12 +193,8 @@ fun CityPickerDialog(
                                 setOnValueChangedListener { _, _, newVal ->
                                     currentIndex = newVal
                                 }
-
-                                // ⚙️ 樣式調整
                                 textSize = 40f
                                 descendantFocusability = NumberPicker.FOCUS_BLOCK_DESCENDANTS
-
-                                // 改變選中文字顏色為黑，其餘灰色
                                 try {
                                     val field = NumberPicker::class.java.getDeclaredField("mSelectorWheelPaint")
                                     field.isAccessible = true
@@ -209,10 +208,7 @@ fun CityPickerDialog(
                             .height(150.dp)
                     )
                 }
-
                 Spacer(Modifier.height(20.dp))
-
-                // --- 底部按鈕 ---
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly
@@ -221,14 +217,18 @@ fun CityPickerDialog(
                         onClick = { onConfirm(cityList[currentIndex]) },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3D5AFE)),
                         shape = RoundedCornerShape(50.dp),
-                        modifier = Modifier.width(100.dp).height(40.dp)
+                        modifier = Modifier
+                            .width(100.dp)
+                            .height(40.dp)
                     ) { Text("確定", color = Color.White, fontSize = 18.sp) }
 
                     Button(
                         onClick = onDismiss,
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF757575)),
                         shape = RoundedCornerShape(50.dp),
-                        modifier = Modifier.width(100.dp).height(40.dp)
+                        modifier = Modifier
+                            .width(100.dp)
+                            .height(40.dp)
                     ) { Text("取消", color = Color.White, fontSize = 18.sp) }
                 }
             }
@@ -271,10 +271,7 @@ fun RoomCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // 🧩 左邊：地點 + 日期時間
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
                         text = room.location.takeIf { it.isNotEmpty() } ?: "未知地點",
                         fontSize = 18.sp,
@@ -294,11 +291,7 @@ fun RoomCard(
                         color = Color.DarkGray
                     )
                 }
-
-                // 🧮 右邊：底分 / 台數 + 將數
-                Column(
-                    horizontalAlignment = Alignment.End
-                ) {
+                Column(horizontalAlignment = Alignment.End) {
                     Text(
                         text = "${room.basePoint}/${room.taiPoint}",
                         fontSize = 28.sp,
