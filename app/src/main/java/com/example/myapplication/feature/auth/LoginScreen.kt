@@ -35,6 +35,8 @@ import com.google.android.gms.common.api.ApiException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.io.BufferedReader
+import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -50,7 +52,7 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
     // ---------- Google Sign-In ----------
     val gso = remember {
         GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestIdToken("213521066881-nttt15ipnd5mg500oeu0an81bq7ejthf.apps.googleusercontent.com")
+            .requestIdToken("213521066881-nttt15ipnd5mg500oeu0an81bq7ejthf.apps.googleusercontent.com") // ⚠ 你的 Web client ID
             .requestEmail()
             .build()
     }
@@ -62,13 +64,39 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
         val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
         try {
             val account = task.getResult(ApiException::class.java)
+            val idToken = account.idToken ?: ""
             val userId = account.id ?: ""
             val displayName = account.displayName ?: "Google 使用者"
-            Log.d("GoogleLogin", "✅ 登入成功: $displayName")
+            val email = account.email ?: ""
+            Log.d("GoogleLogin", "📦 Token: $idToken")
 
+            Log.d("GoogleLogin", "✅ 登入成功: $displayName ($email)")
+
+            // 傳送資料到 PHP 後端
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    val url = URL("http://59.127.30.235:85/api/google_login.php")
+                    val postData =
+                        "idToken=${Uri.encode(idToken)}&userId=${Uri.encode(userId)}&name=${Uri.encode(displayName)}&email=${Uri.encode(email)}"
+
+                    val conn = (url.openConnection() as HttpURLConnection).apply {
+                        requestMethod = "POST"
+                        doOutput = true
+                        outputStream.write(postData.toByteArray())
+                    }
+
+                    val response = BufferedReader(InputStreamReader(conn.inputStream)).use { it.readText() }
+                    Log.d("Google_DB", "伺服器回應: $response")
+                } catch (e: Exception) {
+                    Log.e("Google_DB", "上傳失敗: ${e.message}")
+                }
+            }
+
+            // 儲存使用者資料
             CoroutineScope(Dispatchers.IO).launch {
                 prefs.saveUser(userId, displayName, "")
             }
+
             navController.navigate("home") {
                 popUpTo("login") { inclusive = true }
             }
@@ -91,6 +119,7 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
                     val displayName = profile?.displayName ?: ""
                     val pictureUrl = profile?.pictureUrl?.toString() ?: ""
 
+                    // 傳送到 PHP 後端
                     CoroutineScope(Dispatchers.IO).launch {
                         try {
                             val url = URL("http://59.127.30.235:85/api/api_line_login.php")
@@ -101,15 +130,18 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
                                 doOutput = true
                                 outputStream.write(postData.toByteArray())
                             }
-                            conn.inputStream.bufferedReader().readText()
+                            val response = conn.inputStream.bufferedReader().readText()
+                            Log.d("LINE_DB", "伺服器回應: $response")
                         } catch (e: Exception) {
                             Log.e("LINE_DB", "上傳失敗: ${e.message}")
                         }
                     }
 
+                    // 儲存本地使用者資料
                     CoroutineScope(Dispatchers.IO).launch {
                         prefs.saveUser(userId, displayName, pictureUrl)
                     }
+
                     navController.navigate("home") {
                         popUpTo("login") { inclusive = true }
                     }
@@ -152,7 +184,6 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
                 modifier = Modifier.padding(bottom = 40.dp)
             )
 
-            // 共用按鈕樣式
             val buttonHeight = 56.dp
             val buttonShape = RoundedCornerShape(14.dp)
 
@@ -184,7 +215,7 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
                 }
             }
 
-            // LINE 登入（完全相同大小）
+            // LINE 登入
             Button(
                 onClick = {
                     val intent = LineLoginApi.getLoginIntent(
@@ -219,7 +250,7 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
                 }
             }
 
-            // 開發者快速登入
+            // 開發者登入
             OutlinedTextField(
                 value = devPassword,
                 onValueChange = { devPassword = it },
