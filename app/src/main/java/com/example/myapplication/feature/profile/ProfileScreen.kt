@@ -21,11 +21,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import com.example.myapplication.data.datasource.local.UserPreferences
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.linecorp.linesdk.api.LineApiClientBuilder
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(navController: NavController, vm: ProfileViewModel = viewModel()) {
     val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val prefs = remember { UserPreferences(ctx) }
+
     LaunchedEffect(Unit) { vm.load(ctx) }
 
     val nickname by vm.nickname.collectAsState()
@@ -36,7 +44,7 @@ fun ProfileScreen(navController: NavController, vm: ProfileViewModel = viewModel
             .fillMaxSize()
             .background(Color(0xFFF2F2F2))
     ) {
-        // 🔹 灰色圓弧背景（底邊向內凹）
+        // 🔹 灰色圓弧背景
         Canvas(modifier = Modifier.fillMaxWidth().height(260.dp)) {
             val w = size.width
             val h = size.height
@@ -45,7 +53,7 @@ fun ProfileScreen(navController: NavController, vm: ProfileViewModel = viewModel
                 lineTo(w, 0f)
                 lineTo(w, h * 0.62f)
                 quadraticBezierTo(
-                    w / 2f, h * 0.15f, // 中間上翹控制凹度
+                    w / 2f, h * 0.15f,
                     0f, h * 0.62f
                 )
                 close()
@@ -60,28 +68,27 @@ fun ProfileScreen(navController: NavController, vm: ProfileViewModel = viewModel
                 .navigationBarsPadding(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // 🔹 返回鍵（真正與 TopAppBar 對齊）
+            // 🔹 返回鍵
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .windowInsetsPadding(WindowInsets.statusBars) // 對齊狀態列高度
+                    .windowInsetsPadding(WindowInsets.statusBars)
             ) {
                 IconButton(
                     onClick = { navController.popBackStack() },
                     modifier = Modifier
-                        .padding(start = 4.dp) // 左距略微補正，等同 TopAppBar 預設
-                        .size(48.dp) // 按鈕點擊範圍一致
+                        .padding(start = 4.dp)
+                        .size(48.dp)
                         .align(Alignment.TopStart)
                 ) {
                     Icon(
                         imageVector = Icons.Default.ArrowBack,
                         contentDescription = "返回",
                         tint = Color.Black,
-                        modifier = Modifier.size(24.dp) // 與 TopAppBar 圖示大小一致
+                        modifier = Modifier.size(24.dp)
                     )
                 }
             }
-
 
             Spacer(modifier = Modifier.height(40.dp))
 
@@ -119,7 +126,7 @@ fun ProfileScreen(navController: NavController, vm: ProfileViewModel = viewModel
                 shape = RoundedCornerShape(8.dp),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(48.dp)
+                    .height(50.dp)
             ) {
                 Text("登出帳號", fontSize = 16.sp, color = Color.White)
             }
@@ -135,10 +142,36 @@ fun ProfileScreen(navController: NavController, vm: ProfileViewModel = viewModel
                 text = { Text("確定要登出帳號嗎？") },
                 confirmButton = {
                     TextButton(onClick = {
-                        vm.logout(ctx)
-                        Toast.makeText(ctx, "登出成功", Toast.LENGTH_SHORT).show()
-                        navController.navigate("main") { popUpTo(0) { inclusive = true } }
-                    }) { Text("確定") }
+                        scope.launch {
+                            try {
+                                // ✅ 1️⃣ 清除本地 DataStore（開發者 / LINE）
+                                prefs.clear()
+
+                                // ✅ 2️⃣ 登出 Google
+                                val googleClient = GoogleSignIn.getClient(
+                                    ctx,
+                                    GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN).build()
+                                )
+                                googleClient.signOut()
+
+                                // ✅ 3️⃣ 登出 LINE
+                                val lineClient = LineApiClientBuilder(ctx, "2008319508").build()
+                                lineClient.logout()
+
+                                Toast.makeText(ctx, "登出成功", Toast.LENGTH_SHORT).show()
+
+                                // ✅ 4️⃣ 導回登入頁
+                                navController.navigate("login") {
+                                    popUpTo(0) { inclusive = true }
+                                }
+                            } catch (e: Exception) {
+                                Toast.makeText(ctx, "登出時發生錯誤: ${e.message}", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                        showLogoutDialog = false
+                    }) {
+                        Text("確定")
+                    }
                 },
                 dismissButton = {
                     TextButton(onClick = { showLogoutDialog = false }) { Text("取消") }
@@ -148,7 +181,7 @@ fun ProfileScreen(navController: NavController, vm: ProfileViewModel = viewModel
     }
 }
 
-// 🔹 共用卡片選項元件
+// 🔹 共用選項卡
 @Composable
 fun ProfileOption(
     title: String,
