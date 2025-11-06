@@ -69,6 +69,8 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
     implementation("androidx.compose.material:material-icons-extended:1.6.1")
+    implementation("androidx.compose.material3:material3:1.3.1")
+
 
     // Navigation
     implementation("androidx.navigation:navigation-compose:2.7.7")
@@ -109,6 +111,8 @@ dependencies {
 
     // Ktor Client Engine
     implementation("io.ktor:ktor-client-okhttp:2.3.5")
+
+    implementation("com.linecorp.linesdk:linesdk:5.8.0")
     //google
     implementation("com.google.android.libraries.places:places:3.3.0")
     implementation("androidx.appcompat:appcompat:1.6.1")
@@ -121,4 +125,9 @@ dependencies {
     // Jetpack DataStore (Preferences 版本)
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("androidx.datastore:datastore-core:1.1.1")
+    implementation(libs.ktor.client.core)
+    implementation(libs.ktor.client.cio)
+    implementation(libs.ktor.client.json)
+    implementation(libs.ktor.client.serialization)
+
 }

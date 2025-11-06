@@ -41,7 +41,7 @@ fun AppNavGraph() {
         composable("createHistory") { CreateHistoryScreen(navController) }
 
         composable(
-            route = Routes.RoomDetail.path,
+            route = Routes.RoomDetail.route,
             arguments = listOf(navArgument("roomId") { type = NavType.StringType })
         ) { backStackEntry ->
             val roomId = backStackEntry.arguments?.getString("roomId")
