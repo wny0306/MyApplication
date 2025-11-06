@@ -30,6 +30,8 @@ android {
             "SUPABASE_ANON_KEY",
             "\"${project.findProperty("SUPABASE_ANON_KEY") ?: ""}\""
         )
+
+
     }
 
     buildTypes {
@@ -130,6 +132,9 @@ dependencies {
     implementation(libs.ktor.client.cio)
     implementation(libs.ktor.client.json)
     implementation(libs.ktor.client.serialization)
+
+    // 🖼️ Coil 圖片載入 (for Compose)
+    implementation("io.coil-kt:coil-compose:2.6.0")
 
     //下拉刷新
     implementation("com.google.accompanist:accompanist-swiperefresh:0.36.0")
