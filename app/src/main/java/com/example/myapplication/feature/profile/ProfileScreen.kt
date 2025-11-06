@@ -34,60 +34,50 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProfileScreen(navController: NavController, vm: ProfileViewModel = viewModel()) {
+fun ProfileScreen(
+    navController: NavController,
+    vm: ProfileViewModel = viewModel()
+) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val prefs = remember { UserPreferences(ctx) }
 
+    // 載入使用者資料
     LaunchedEffect(Unit) { vm.load(ctx) }
 
     val nickname by vm.nickname.collectAsState()
     val avatarUri by vm.avatarUri.collectAsState()
     var showLogoutDialog by remember { mutableStateOf(false) }
 
-    // 載入資料
-    LaunchedEffect(Unit) { vm.load(ctx) }
-
     Scaffold(
-        topBar = { // ✅ 修正：加上 topBar 命名參數
+        topBar = {
             TopAppBar(
                 title = { Text("個人資料", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "返回", tint = Color.Black)
+                        Icon(
+                            Icons.Default.ArrowBack,
+                            contentDescription = "返回",
+                            tint = Color.Black
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color(0xFFE0E0E0), // ✅ 改成和圓弧相同灰色
+                    containerColor = Color(0xFFE0E0E0),
                     titleContentColor = Color.Black,
                     navigationIconContentColor = Color.Black
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFFF2F2F2))
-    ) {
-        // 🔹 灰色圓弧背景
-        Canvas(modifier = Modifier.fillMaxWidth().height(260.dp)) {
-            val w = size.width
-            val h = size.height
-            val path = Path().apply {
-                moveTo(0f, 0f)
-                lineTo(w, 0f)
-                lineTo(w, h * 0.62f)
-                quadraticBezierTo(
-                    w / 2f, h * 0.15f,
-                    0f, h * 0.62f
                 )
             )
         }
     ) { padding ->
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color(0xFFF2F2F2))
                 .padding(padding)
         ) {
-            // 🔹 上方圓弧背景
+            // 🔹 上方灰色圓弧背景
             Canvas(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -102,26 +92,7 @@ fun ProfileScreen(navController: NavController, vm: ProfileViewModel = viewModel
                     quadraticBezierTo(
                         w / 2f, h * 0.15f,
                         0f, h * 0.62f
-            // 🔹 返回鍵
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .windowInsetsPadding(WindowInsets.statusBars)
-            ) {
-                IconButton(
-                    onClick = { navController.popBackStack() },
-                    modifier = Modifier
-                        .padding(start = 4.dp)
-                        .size(48.dp)
-                        .align(Alignment.TopStart)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.ArrowBack,
-                        contentDescription = "返回",
-                        tint = Color.Black,
-                        modifier = Modifier.size(24.dp)
                     )
-                    close()
                 }
                 drawPath(path = path, color = Color(0xFFE0E0E0), style = Fill)
             }
@@ -133,7 +104,7 @@ fun ProfileScreen(navController: NavController, vm: ProfileViewModel = viewModel
                     .navigationBarsPadding(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Spacer(modifier = Modifier.height(40.dp))
+                Spacer(modifier = Modifier.height(60.dp))
 
                 // 🔹 頭像
                 Box(
@@ -159,9 +130,10 @@ fun ProfileScreen(navController: NavController, vm: ProfileViewModel = viewModel
                         )
                     }
                 }
-            Spacer(modifier = Modifier.height(40.dp))
 
                 Spacer(modifier = Modifier.height(12.dp))
+
+                // 🔹 暱稱
                 Text(
                     text = nickname,
                     fontSize = 22.sp,
@@ -210,81 +182,46 @@ fun ProfileScreen(navController: NavController, vm: ProfileViewModel = viewModel
                     text = { Text("確定要登出帳號嗎？") },
                     confirmButton = {
                         TextButton(onClick = {
-                            vm.logout(ctx)
-                            Toast.makeText(ctx, "登出成功", Toast.LENGTH_SHORT).show()
-                            navController.navigate("main") {
-                                popUpTo(0) { inclusive = true }
+                            scope.launch {
+                                try {
+                                    // ✅ 清除本地資料
+                                    prefs.clear()
+
+                                    // ✅ 登出 Google
+                                    val googleClient = GoogleSignIn.getClient(
+                                        ctx,
+                                        GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN).build()
+                                    )
+                                    googleClient.signOut()
+
+                                    // ✅ 登出 LINE
+                                    val lineClient = LineApiClientBuilder(ctx, "2008319508").build()
+                                    lineClient.logout()
+
+                                    Toast.makeText(ctx, "登出成功", Toast.LENGTH_SHORT).show()
+
+                                    // ✅ 導回登入頁
+                                    navController.navigate("login") {
+                                        popUpTo(0) { inclusive = true }
+                                    }
+                                } catch (e: Exception) {
+                                    Toast.makeText(
+                                        ctx,
+                                        "登出時發生錯誤: ${e.message}",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
                             }
-                        }) { Text("確定") }
+                            showLogoutDialog = false
+                        }) {
+                            Text("確定")
+                        }
                     },
                     dismissButton = {
                         TextButton(onClick = { showLogoutDialog = false }) { Text("取消") }
                     }
                 )
             }
-        }
-    }
-}
-
-// 🔹 共用卡片項目
-            // 🔹 登出按鈕
-            Button(
-                onClick = { showLogoutDialog = true },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3A3A3A)),
-                shape = RoundedCornerShape(8.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp)
-            ) {
-                Text("登出帳號", fontSize = 16.sp, color = Color.White)
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-        }
-
-        // 🔹 登出確認對話框
-        if (showLogoutDialog) {
-            AlertDialog(
-                onDismissRequest = { showLogoutDialog = false },
-                title = { Text("確認登出") },
-                text = { Text("確定要登出帳號嗎？") },
-                confirmButton = {
-                    TextButton(onClick = {
-                        scope.launch {
-                            try {
-                                // ✅ 1️⃣ 清除本地 DataStore（開發者 / LINE）
-                                prefs.clear()
-
-                                // ✅ 2️⃣ 登出 Google
-                                val googleClient = GoogleSignIn.getClient(
-                                    ctx,
-                                    GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN).build()
-                                )
-                                googleClient.signOut()
-
-                                // ✅ 3️⃣ 登出 LINE
-                                val lineClient = LineApiClientBuilder(ctx, "2008319508").build()
-                                lineClient.logout()
-
-                                Toast.makeText(ctx, "登出成功", Toast.LENGTH_SHORT).show()
-
-                                // ✅ 4️⃣ 導回登入頁
-                                navController.navigate("login") {
-                                    popUpTo(0) { inclusive = true }
-                                }
-                            } catch (e: Exception) {
-                                Toast.makeText(ctx, "登出時發生錯誤: ${e.message}", Toast.LENGTH_SHORT).show()
-                            }
-                        }
-                        showLogoutDialog = false
-                    }) {
-                        Text("確定")
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showLogoutDialog = false }) { Text("取消") }
-                }
-            )
         }
     }
 }
