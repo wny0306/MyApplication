@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import coil.compose.rememberAsyncImagePainter
+import com.example.myapplication.data.datasource.local.UserData
 import com.example.myapplication.data.datasource.local.UserPreferences
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
@@ -42,12 +43,18 @@ fun ProfileScreen(
     val scope = rememberCoroutineScope()
     val prefs = remember { UserPreferences(ctx) }
 
-    // 載入使用者資料
+    // 載入暱稱與頭貼
     LaunchedEffect(Unit) { vm.load(ctx) }
 
     val nickname by vm.nickname.collectAsState()
     val avatarUri by vm.avatarUri.collectAsState()
     var showLogoutDialog by remember { mutableStateOf(false) }
+
+    // 取得完整使用者資料
+    var userInfo by remember { mutableStateOf<UserData?>(null) }
+    LaunchedEffect(Unit) {
+        userInfo = prefs.getUser()
+    }
 
     Scaffold(
         topBar = {
@@ -77,7 +84,7 @@ fun ProfileScreen(
                 .background(Color(0xFFF2F2F2))
                 .padding(padding)
         ) {
-            // 🔹 上方灰色圓弧背景
+            // 上方灰色圓弧背景
             Canvas(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -89,10 +96,7 @@ fun ProfileScreen(
                     moveTo(0f, 0f)
                     lineTo(w, 0f)
                     lineTo(w, h * 0.62f)
-                    quadraticBezierTo(
-                        w / 2f, h * 0.15f,
-                        0f, h * 0.62f
-                    )
+                    quadraticBezierTo(w / 2f, h * 0.15f, 0f, h * 0.62f)
                 }
                 drawPath(path = path, color = Color(0xFFE0E0E0), style = Fill)
             }
@@ -106,7 +110,7 @@ fun ProfileScreen(
             ) {
                 Spacer(modifier = Modifier.height(60.dp))
 
-                // 🔹 頭像
+                // 頭像
                 Box(
                     modifier = Modifier
                         .size(100.dp)
@@ -133,9 +137,25 @@ fun ProfileScreen(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // 🔹 暱稱
+                // 顯示使用者資料
+                userInfo?.let { user: UserData ->
+                    Text(
+                        text = "登入方式：${user.provider.uppercase()}",
+                        fontSize = 14.sp,
+                        color = Color.Gray
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "官方名稱：${user.name.ifEmpty { "未提供" }}",
+                        fontSize = 18.sp,
+                        color = Color.DarkGray
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                }
+
+                // 使用者自訂暱稱
                 Text(
-                    text = nickname,
+                    text = "暱稱：$nickname",
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.Black
@@ -143,7 +163,7 @@ fun ProfileScreen(
 
                 Spacer(modifier = Modifier.height(32.dp))
 
-                // 🔹 功能選項
+                // 功能選項
                 ProfileOption("對局紀錄", Icons.Default.SportsEsports) {
                     navController.navigate("matchHistory")
                 }
@@ -159,7 +179,7 @@ fun ProfileScreen(
 
                 Spacer(modifier = Modifier.height(40.dp))
 
-                // 🔹 登出按鈕
+                // 登出按鈕
                 Button(
                     onClick = { showLogoutDialog = true },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3A3A3A)),
@@ -174,7 +194,7 @@ fun ProfileScreen(
                 Spacer(modifier = Modifier.height(24.dp))
             }
 
-            // 🔹 登出確認對話框
+            // 登出對話框
             if (showLogoutDialog) {
                 AlertDialog(
                     onDismissRequest = { showLogoutDialog = false },
@@ -184,30 +204,26 @@ fun ProfileScreen(
                         TextButton(onClick = {
                             scope.launch {
                                 try {
-                                    // ✅ 清除本地資料
                                     prefs.clear()
 
-                                    // ✅ 登出 Google
                                     val googleClient = GoogleSignIn.getClient(
                                         ctx,
                                         GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN).build()
                                     )
                                     googleClient.signOut()
 
-                                    // ✅ 登出 LINE
-                                    val lineClient = LineApiClientBuilder(ctx, "2008319508").build()
+                                    val lineClient =
+                                        LineApiClientBuilder(ctx, "2008319508").build()
                                     lineClient.logout()
 
                                     Toast.makeText(ctx, "登出成功", Toast.LENGTH_SHORT).show()
-
-                                    // ✅ 導回登入頁
                                     navController.navigate("login") {
                                         popUpTo(0) { inclusive = true }
                                     }
                                 } catch (e: Exception) {
                                     Toast.makeText(
                                         ctx,
-                                        "登出時發生錯誤: ${e.message}",
+                                        "登出錯誤: ${e.message}",
                                         Toast.LENGTH_SHORT
                                     ).show()
                                 }
@@ -226,7 +242,7 @@ fun ProfileScreen(
     }
 }
 
-// 🔹 共用選項卡
+// 共用選項卡
 @Composable
 fun ProfileOption(
     title: String,
