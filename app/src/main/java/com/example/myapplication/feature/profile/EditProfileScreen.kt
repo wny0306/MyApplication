@@ -1,5 +1,6 @@
 package com.example.myapplication.feature.profile
 
+import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -28,6 +29,14 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import coil.compose.rememberAsyncImagePainter
+import com.example.myapplication.data.datasource.local.UserPreferences
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.net.HttpURLConnection
+import java.net.URL
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -36,36 +45,41 @@ fun EditProfileScreen(
     viewModel: ProfileViewModel = viewModel()
 ) {
     val context = LocalContext.current
+    val prefs = remember { UserPreferences(context) }
     val nickname by viewModel.nickname.collectAsState()
     val avatarUri by viewModel.avatarUri.collectAsState()
 
     var tempNickname by remember { mutableStateOf("") }
     var showDialog by remember { mutableStateOf(false) }
 
-    // ✅ 頁面第一次啟動時，載入暱稱與頭貼資料
+    // ✅ 初始化時載入現有資料
     LaunchedEffect(Unit) {
         viewModel.load(context)
     }
 
-    // ✅ 當 nickname 從 SharedPreferences 成功載入後，同步到輸入框
+    // ✅ 同步 nickname
     LaunchedEffect(nickname) {
         if (nickname.isNotBlank() && nickname != "暱稱") {
             tempNickname = nickname
         }
     }
 
-    // 📸 從相簿選擇
+    // 📸 相簿選擇
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
-        uri?.let { viewModel.saveAvatarUri(context, it) }
+        uri?.let {
+            viewModel.saveAvatarUri(context, it)
+        }
     }
 
     // 📷 拍照
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicturePreview()
     ) { bitmap ->
-        bitmap?.let { viewModel.saveAvatarBitmap(context, it) }
+        bitmap?.let {
+            viewModel.saveAvatarBitmap(context, it)
+        }
     }
 
     Scaffold(
@@ -87,7 +101,7 @@ fun EditProfileScreen(
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // 🔹 頭貼顯示區
+            // 🔹 頭像顯示區
             Box(
                 modifier = Modifier
                     .size(120.dp)
@@ -118,7 +132,7 @@ fun EditProfileScreen(
 
             Spacer(Modifier.height(32.dp))
 
-            // 🔹 暱稱輸入框（自動顯示上次儲存的暱稱）
+            // 🔹 暱稱輸入框
             OutlinedTextField(
                 value = tempNickname,
                 onValueChange = { tempNickname = it },
@@ -128,11 +142,42 @@ fun EditProfileScreen(
 
             Spacer(Modifier.height(32.dp))
 
+            // 🔹 儲存按鈕
             Button(
                 onClick = {
-                    viewModel.saveNickname(context, tempNickname)
-                    Toast.makeText(context, "更新成功！", Toast.LENGTH_SHORT).show()
-                    navController.popBackStack()
+                    CoroutineScope(Dispatchers.IO).launch {
+                        val user = prefs.getUser()
+                        val userId = user?.id ?: return@launch
+                        val provider = user?.provider ?: "google"
+                        val avatarUrl = avatarUri?.toString() ?: ""
+
+                        try {
+                            val url = URL("http://59.127.30.235:85/api/update_profile.php")
+                            val postData =
+                                "user_id=${Uri.encode(userId)}&provider=${Uri.encode(provider)}" +
+                                        "&nickname=${Uri.encode(tempNickname)}&avatar_url=${Uri.encode(avatarUrl)}"
+
+                            val conn = (url.openConnection() as HttpURLConnection).apply {
+                                requestMethod = "POST"
+                                doOutput = true
+                                outputStream.write(postData.toByteArray())
+                            }
+
+                            val response = BufferedReader(InputStreamReader(conn.inputStream)).use { it.readText() }
+                            println("🔥 UpdateProfile Response: $response")
+
+                            CoroutineScope(Dispatchers.Main).launch {
+                                Toast.makeText(context, "更新成功！", Toast.LENGTH_SHORT).show()
+                                navController.navigate("home") {
+                                    popUpTo("editProfile") { inclusive = true }
+                                }
+                            }
+                        } catch (e: Exception) {
+                            CoroutineScope(Dispatchers.Main).launch {
+                                Toast.makeText(context, "更新失敗: ${e.message}", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -148,7 +193,7 @@ fun EditProfileScreen(
         }
     }
 
-    // 🔹 彈出式選單：拍照 or 相簿
+    // 🔹 選擇頭貼來源 Dialog
     if (showDialog) {
         AlertDialog(
             onDismissRequest = { showDialog = false },

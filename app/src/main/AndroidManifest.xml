@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- 允許網路連線 -->
     <uses-permission android:name="android.permission.INTERNET" />
 
     <application
@@ -12,8 +14,10 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.MyApplication"
         tools:replace="android:allowBackup"
+        android:usesCleartextTraffic="true"
         android:networkSecurityConfig="@xml/network_security_config">
 
+        <!-- 主活動 -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -25,7 +29,7 @@
             </intent-filter>
         </activity>
 
-        <!-- LINE Login 所需的回呼設定 -->
+        <!-- LINE 登入回呼 -->
         <activity
             android:name="com.linecorp.linesdk.auth.internal.LineAuthenticationActivity"
             android:launchMode="singleTask"
@@ -39,5 +43,4 @@
         </activity>
 
     </application>
-
 </manifest>

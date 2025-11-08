@@ -27,11 +27,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.example.myapplication.R
 import com.example.myapplication.data.datasource.local.UserPreferences
+import com.google.android.gms.auth.api.signin.*
+import com.google.android.gms.common.api.ApiException
 import com.linecorp.linesdk.Scope
 import com.linecorp.linesdk.auth.LineAuthenticationParams
 import com.linecorp.linesdk.auth.LineLoginApi
-import com.google.android.gms.auth.api.signin.*
-import com.google.android.gms.common.api.ApiException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -52,7 +52,7 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
     // ---------- Google Sign-In ----------
     val gso = remember {
         GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestIdToken("213521066881-nttt15ipnd5mg500oeu0an81bq7ejthf.apps.googleusercontent.com") // ⚠ 你的 Web client ID
+            .requestIdToken("213521066881-nttt15ipnd5mg500oeu0an81bq7ejthf.apps.googleusercontent.com") // Web client ID
             .requestEmail()
             .build()
     }
@@ -68,7 +68,6 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
             val userId = account.id ?: ""
             val displayName = account.displayName ?: "Google 使用者"
             val email = account.email ?: ""
-            Log.d("GoogleLogin", "📦 Token: $idToken")
 
             Log.d("GoogleLogin", "✅ 登入成功: $displayName ($email)")
 
@@ -77,7 +76,7 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
                 try {
                     val url = URL("http://59.127.30.235:85/api/google_login.php")
                     val postData =
-                        "idToken=${Uri.encode(idToken)}&userId=${Uri.encode(userId)}&name=${Uri.encode(displayName)}&email=${Uri.encode(email)}"
+                        "idToken=${Uri.encode(idToken)}&name=${Uri.encode(displayName)}&email=${Uri.encode(email)}"
 
                     val conn = (url.openConnection() as HttpURLConnection).apply {
                         requestMethod = "POST"
@@ -87,18 +86,25 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
 
                     val response = BufferedReader(InputStreamReader(conn.inputStream)).use { it.readText() }
                     Log.d("Google_DB", "伺服器回應: $response")
+
+                    // 儲存使用者資料到本地
+                    prefs.saveUser(
+                        id = userId,
+                        provider = "google",
+                        name = displayName,
+                        nickname = displayName,
+                        avatarUrl = ""
+                    )
+
+                    // 導向主畫面
+                    CoroutineScope(Dispatchers.Main).launch {
+                        navController.navigate("home") {
+                            popUpTo("login") { inclusive = true }
+                        }
+                    }
                 } catch (e: Exception) {
                     Log.e("Google_DB", "上傳失敗: ${e.message}")
                 }
-            }
-
-            // 儲存使用者資料
-            CoroutineScope(Dispatchers.IO).launch {
-                prefs.saveUser(userId, displayName, "")
-            }
-
-            navController.navigate("home") {
-                popUpTo("login") { inclusive = true }
             }
         } catch (e: ApiException) {
             Log.e("GoogleLogin", "❌ 登入失敗: ${e.statusCode}")
@@ -116,37 +122,44 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
                 "SUCCESS" -> {
                     val profile = loginResult.lineProfile
                     val userId = profile?.userId ?: ""
-                    val displayName = profile?.displayName ?: ""
+                    val displayName = profile?.displayName ?: "LINE 使用者"
                     val pictureUrl = profile?.pictureUrl?.toString() ?: ""
 
-                    // 傳送到 PHP 後端
+                    Log.d("LINE_LOGIN", "✅ 登入成功: $displayName ($userId)")
+
                     CoroutineScope(Dispatchers.IO).launch {
                         try {
                             val url = URL("http://59.127.30.235:85/api/api_line_login.php")
                             val postData =
                                 "userId=$userId&displayName=${Uri.encode(displayName)}&pictureUrl=${Uri.encode(pictureUrl)}"
+
                             val conn = (url.openConnection() as HttpURLConnection).apply {
                                 requestMethod = "POST"
                                 doOutput = true
                                 outputStream.write(postData.toByteArray())
                             }
+
                             val response = conn.inputStream.bufferedReader().readText()
                             Log.d("LINE_DB", "伺服器回應: $response")
+
+                            prefs.saveUser(
+                                id = userId,
+                                provider = "line",
+                                name = displayName,
+                                nickname = displayName, // 初始暱稱 = 官方名稱
+                                avatarUrl = pictureUrl
+                            )
+
+                            CoroutineScope(Dispatchers.Main).launch {
+                                navController.navigate("home") {
+                                    popUpTo("login") { inclusive = true }
+                                }
+                            }
                         } catch (e: Exception) {
                             Log.e("LINE_DB", "上傳失敗: ${e.message}")
                         }
                     }
-
-                    // 儲存本地使用者資料
-                    CoroutineScope(Dispatchers.IO).launch {
-                        prefs.saveUser(userId, displayName, pictureUrl)
-                    }
-
-                    navController.navigate("home") {
-                        popUpTo("login") { inclusive = true }
-                    }
                 }
-
                 else -> Log.e("LINE_LOGIN", "登入失敗: ${loginResult.errorData.message}")
             }
         } catch (e: Exception) {
@@ -263,7 +276,13 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
                 onClick = {
                     if (devPassword == developerPass) {
                         CoroutineScope(Dispatchers.IO).launch {
-                            prefs.saveUser("dev_user", "Developer", "")
+                            prefs.saveUser(
+                                id = "dev_user",
+                                provider = "developer",
+                                name = "Developer",
+                                nickname = "Developer",
+                                avatarUrl = ""
+                            )
                             Log.d("AutoLogin", "✅ 開發者模式登入成功")
                         }
                         navController.navigate("home") {
