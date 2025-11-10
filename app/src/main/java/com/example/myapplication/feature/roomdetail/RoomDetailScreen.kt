@@ -3,6 +3,7 @@ package com.example.myapplication.feature.roomdetail
 import android.content.Intent
 import android.net.Uri
 import android.util.Log
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -23,33 +24,28 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.example.myapplication.App
 import com.example.myapplication.domain.model.MahjongRoom
 import com.example.myapplication.domain.model.Member
 import com.example.myapplication.feature.home.RoomListViewModel
-import io.github.jan.supabase.gotrue.auth
 import kotlinx.coroutines.launch
-import android.widget.Toast
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RoomDetailScreen(
     navController: NavController,
-    roomId: String?,
+    roomId: Int?,                       // ✅ 改成 Int
     vm: RoomListViewModel
 ) {
-    // ✅ 房間詳情狀態
     var detail by remember { mutableStateOf<MahjongRoom?>(null) }
 
     // ✅ 從後端載入房間資料
     LaunchedEffect(roomId) {
-        if (!roomId.isNullOrEmpty()) {
+        if (roomId != null && roomId > 0) {
             detail = vm.getRoom(roomId)
             Log.d("RoomDebug", "詳情載入完成，成員=${detail?.members?.size} / ${detail?.members}")
         }
     }
 
-    // ✅ 載入中畫面
     if (detail == null) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text("載入中...", color = Color.Gray)
@@ -59,7 +55,6 @@ fun RoomDetailScreen(
 
     val room = detail!!
     val safeRoom = room.copy(
-        title = room.title.ifEmpty { "未命名房間" },
         location = room.location.ifEmpty { "未設定地點" },
         date = room.date.ifEmpty { "未設定日期" },
         time = room.time.ifEmpty { "未設定時間" },
@@ -69,9 +64,7 @@ fun RoomDetailScreen(
         note = room.note ?: "無備註"
     )
 
-    val members: List<Member> = safeRoom.members ?: emptyList()
-    Log.d("RoomDebug", "成員數量: ${members.size} / 內容: $members")
-
+    val members = safeRoom.members
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -82,7 +75,7 @@ fun RoomDetailScreen(
         mutableStateOf(
             when {
                 currentUserId == safeRoom.ownerId -> RoomViewerRole.Owner
-                members.any { it.id == currentUserId } -> RoomViewerRole.Member
+                members.any { it.id == (currentUserId ?: -1) } -> RoomViewerRole.Member
                 else -> RoomViewerRole.Visitor
             }
         )
@@ -193,27 +186,14 @@ fun RoomDetailScreen(
                     Icon(Icons.Default.Person, contentDescription = null, tint = buttonColors, modifier = Modifier.size(30.dp))
                     Spacer(Modifier.width(24.dp))
                     Column {
-                        Text(
-                            text = member.name,
-                            color = buttonColors,
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = member.intro.ifEmpty { "這位玩家還沒寫自我介紹" },
-                            color = Color.DarkGray,
-                            fontSize = 14.sp
-                        )
+                        Text(member.name, color = buttonColors, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                        Text(member.intro.ifEmpty { "這位玩家還沒寫自我介紹" }, color = Color.DarkGray, fontSize = 14.sp)
                     }
                 }
             }
 
-            // 🧩 先把房主排除，避免重算
             val nonOwnerMembers = members.filter { it.id != safeRoom.ownerId }
-
-            // 🧩 空位 = 總人數 - 房主(1) - 其他已加入的成員數
             val emptySlots = safeRoom.people - 1 - nonOwnerMembers.size
-            Log.d("RoomDebug", "人數設定: ${safeRoom.people}, 成員數: ${members.size}, ownerId=${safeRoom.ownerId}")
             repeat(emptySlots) {
                 Row(
                     modifier = Modifier
@@ -245,26 +225,15 @@ fun RoomDetailScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    // 左上：規則
-                    Column(
-                        boxModifier.clickable { showRuleDialog = true },
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(boxModifier.clickable { showRuleDialog = true },
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
+                        verticalArrangement = Arrangement.Center) {
                         Text("規則", fontWeight = FontWeight.Bold, fontSize = 20.sp)
                         Text("${safeRoom.basePoint}/${safeRoom.taiPoint}", fontSize = 30.sp)
                     }
 
-                    // 右上：時間
-                    Column(
-                        boxModifier,
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
+                    Column(boxModifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                         Text("時間", fontWeight = FontWeight.Bold, fontSize = 20.sp)
                         Text(safeRoom.time, fontSize = 30.sp)
                         Spacer(Modifier.height(5.dp))
@@ -272,31 +241,22 @@ fun RoomDetailScreen(
                     }
                 }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    // 左下：備註
-                    Column(
-                        boxModifier.clickable { showNoteDialog = true },
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(boxModifier.clickable { showNoteDialog = true },
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
+                        verticalArrangement = Arrangement.Center) {
                         Text("備註", fontWeight = FontWeight.Bold, fontSize = 20.sp)
                         Icon(Icons.Default.MoreHoriz, contentDescription = null, modifier = Modifier.size(52.dp))
                     }
 
-                    // 右下：地點
-                    Column(
-                        boxModifier.clickable {
-                            val gmmIntentUri = Uri.parse("geo:0,0?q=${safeRoom.location}")
-                            val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
-                            mapIntent.setPackage("com.google.android.apps.maps")
-                            context.startActivity(mapIntent)
-                        },
+                    Column(boxModifier.clickable {
+                        val gmmIntentUri = Uri.parse("geo:0,0?q=${safeRoom.location}")
+                        val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
+                        mapIntent.setPackage("com.google.android.apps.maps")
+                        context.startActivity(mapIntent)
+                    },
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
+                        verticalArrangement = Arrangement.Center) {
                         Text("地點", fontWeight = FontWeight.Bold, fontSize = 20.sp)
                         Text(safeRoom.location.take(10), fontSize = 20.sp, textAlign = TextAlign.Center)
                     }
@@ -305,201 +265,110 @@ fun RoomDetailScreen(
         }
     }
 
-    // ✅ 彈出視窗：規則
+    // ✅ 規則彈窗
     if (showRuleDialog) {
-        AlertDialog(
-            onDismissRequest = { showRuleDialog = false },
-            confirmButton = {},
-            text = {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("麻將設定", fontWeight = FontWeight.Bold, fontSize = 20.sp)
-                    Text("將數：${safeRoom.rounds}")
-                    Text("花牌：${if (safeRoom.flower) "有" else "無"}")
-                    Text("骰規：${if (safeRoom.diceRule) "有" else "無"}")
-                    Text("哩咕：${if (safeRoom.ligu) "有" else "無"}")
-                }
+        AlertDialog(onDismissRequest = { showRuleDialog = false }, confirmButton = {}, text = {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("麻將設定", fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                Text("將數：${safeRoom.rounds}")
+                Text("花牌：${if (safeRoom.flower) "有" else "無"}")
+                Text("骰規：${if (safeRoom.diceRule) "有" else "無"}")
+                Text("哩咕：${if (safeRoom.ligu) "有" else "無"}")
             }
-        )
+        })
     }
 
-    // ✅ 彈出視窗：備註
+    // ✅ 備註彈窗
     if (showNoteDialog) {
-        AlertDialog(
-            onDismissRequest = { showNoteDialog = false },
-            confirmButton = {},
-            text = {
-                Column(
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = "房主備註：",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.Black,
-                        textAlign = TextAlign.Start
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = safeRoom.note?.ifEmpty { "無" } ?: "無",
-                        fontSize = 18.sp,
-                        color = Color.DarkGray,
-                        textAlign = TextAlign.Start,
-                        lineHeight = 24.sp
-                    )
-                }
+        AlertDialog(onDismissRequest = { showNoteDialog = false }, confirmButton = {}, text = {
+            Column(Modifier.fillMaxWidth()) {
+                Text("房主備註：", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                Spacer(Modifier.height(8.dp))
+                Text(safeRoom.note?.ifEmpty { "無" } ?: "無", fontSize = 18.sp, color = Color.DarkGray)
             }
-        )
+        })
     }
 
-
-    // ✅ 刪除房間確認
+    // ✅ 刪除房間
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
-            confirmButton = {},
-            dismissButton = {},
-            text = {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color(0xFFFFCDD2), RoundedCornerShape(16.dp))
-                        .padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text("你確定要刪除房間？", color = Color.Black, fontSize = 18.sp)
-                    Spacer(Modifier.height(16.dp))
-                    Button(
-                        onClick = {
-                            showDeleteDialog = false
-                            scope.launch {
-                                val ok = vm.deleteRoom(safeRoom.id)
-                                if (ok) {
-                                    snackbarHostState.showSnackbar("房間已刪除")
-                                    navController.popBackStack()
-                                } else {
-                                    snackbarHostState.showSnackbar("刪除失敗，請稍後再試")
-                                }
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.Red, contentColor = Color.White),
-                        shape = RoundedCornerShape(50.dp),
-                        modifier = Modifier.fillMaxWidth(0.8f).height(48.dp)
-                    ) {
-                        Text("確定")
+            confirmButton = {
+                Button(onClick = {
+                    showDeleteDialog = false
+                    scope.launch {
+                        val ok = vm.deleteRoom(safeRoom.id)
+                        if (ok) {
+                            snackbarHostState.showSnackbar("房間已刪除")
+                            navController.popBackStack()
+                        } else {
+                            snackbarHostState.showSnackbar("刪除失敗，請稍後再試")
+                        }
                     }
-
-                    Spacer(Modifier.height(8.dp))
-
-                    Button(
-                        onClick = { showDeleteDialog = false },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.LightGray, contentColor = Color.Black),
-                        shape = RoundedCornerShape(50.dp),
-                        modifier = Modifier.fillMaxWidth(0.8f).height(48.dp)
-                    ) {
-                        Text("否")
-                    }
-                }
+                }) { Text("確定") }
             },
-            containerColor = Color.Transparent
+            dismissButton = {
+                OutlinedButton(onClick = { showDeleteDialog = false }) { Text("否") }
+            },
+            text = {
+                Column(Modifier.fillMaxWidth()) {
+                    Text("你確定要刪除房間？", color = Color.Black, fontSize = 18.sp)
+                }
+            }
         )
     }
 
-    // ✅ 離開房間確認
+    // ✅ 離開房間
     if (showLeaveDialog) {
         AlertDialog(
             onDismissRequest = { showLeaveDialog = false },
-            confirmButton = {},
-            dismissButton = {},
-            text = {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color(0xFFFFCDD2), RoundedCornerShape(16.dp))
-                        .padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text("你確定要離開房間？", color = Color.Black, fontSize = 18.sp)
-                    Spacer(Modifier.height(16.dp))
-                    Button(
-                        onClick = {
-                            showLeaveDialog = false
-                            scope.launch {
-                                val uid = vm.currentUserId()
-                                if (uid != null) {
-                                    val ok = vm.leaveRoom(safeRoom.id, uid)
-                                    if (ok) {
-                                        snackbarHostState.showSnackbar("已離開房間")
-                                        navController.popBackStack()
-                                    } else {
-                                        snackbarHostState.showSnackbar("離開失敗")
-                                    }
-                                }
+            confirmButton = {
+                Button(onClick = {
+                    showLeaveDialog = false
+                    scope.launch {
+                        val uid = vm.currentUserId()
+                        if (uid != null) {
+                            val ok = vm.leaveRoom(safeRoom.id, uid)
+                            if (ok) {
+                                snackbarHostState.showSnackbar("已離開房間")
+                                navController.popBackStack()
+                            } else {
+                                snackbarHostState.showSnackbar("離開失敗")
                             }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.Red, contentColor = Color.White),
-                        shape = RoundedCornerShape(50.dp),
-                        modifier = Modifier.fillMaxWidth(0.8f).height(48.dp)
-                    ) {
-                        Text("確定")
+                        }
                     }
-
-                    Spacer(Modifier.height(8.dp))
-
-                    Button(
-                        onClick = { showLeaveDialog = false },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.LightGray, contentColor = Color.Black),
-                        shape = RoundedCornerShape(50.dp),
-                        modifier = Modifier.fillMaxWidth(0.8f).height(48.dp)
-                    ) {
-                        Text("否")
-                    }
-                }
+                }) { Text("確定") }
             },
-            containerColor = Color.Transparent
+            dismissButton = {
+                OutlinedButton(onClick = { showLeaveDialog = false }) { Text("否") }
+            },
+            text = { Text("你確定要離開房間？", fontSize = 18.sp, color = Color.Black) }
         )
     }
+
+    // ✅ 加入房間
     if (showJoinDialog) {
         AlertDialog(
             onDismissRequest = { showJoinDialog = false },
-            confirmButton = {},
-            dismissButton = {},
-            text = {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color(0xFFBBDEFB), RoundedCornerShape(16.dp)) // 淺藍背景
-                        .padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text("你確定要加入這個房間？", color = Color.Black, fontSize = 18.sp)
-                    Spacer(Modifier.height(16.dp))
-
-                    Button(
-                        onClick = {
-                            showJoinDialog = false
-                            scope.launch {
-                                val currentUserId = App.supabase.auth.currentUserOrNull()?.id ?: return@launch
-                                val ok = vm.joinRoom(safeRoom.id, currentUserId)
-                                if (ok) snackbarHostState.showSnackbar("成功加入房間！")
-                                else snackbarHostState.showSnackbar("加入失敗，請稍後再試")
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3), contentColor = Color.White),
-                        shape = RoundedCornerShape(50.dp),
-                        modifier = Modifier.fillMaxWidth(0.8f).height(48.dp)
-                    ) { Text("確定") }
-
-                    Spacer(Modifier.height(8.dp))
-
-                    Button(
-                        onClick = { showJoinDialog = false },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.LightGray, contentColor = Color.Black),
-                        shape = RoundedCornerShape(50.dp),
-                        modifier = Modifier.fillMaxWidth(0.8f).height(48.dp)
-                    ) { Text("取消") }
-                }
+            confirmButton = {
+                Button(onClick = {
+                    showJoinDialog = false
+                    scope.launch {
+                        val uid = vm.currentUserId()
+                        if (uid != null) {
+                            val ok = vm.joinRoom(safeRoom.id, uid)
+                            if (ok) snackbarHostState.showSnackbar("成功加入房間！")
+                            else snackbarHostState.showSnackbar("加入失敗，請稍後再試")
+                        } else {
+                            // 這裡也可以導去登入
+                        }
+                    }
+                }) { Text("確定") }
             },
-            containerColor = Color.Transparent // ✨ 關鍵：讓 AlertDialog 背景透明
+            dismissButton = {
+                OutlinedButton(onClick = { showJoinDialog = false }) { Text("取消") }
+            },
+            text = { Text("你確定要加入這個房間？", fontSize = 18.sp, color = Color.Black) }
         )
     }
 }

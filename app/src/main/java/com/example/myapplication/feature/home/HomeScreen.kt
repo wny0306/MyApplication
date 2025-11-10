@@ -44,7 +44,7 @@ fun HomeScreen(navController: NavController, vm: RoomListViewModel) {
 
     LaunchedEffect(selectedCity) { vm.onCitySelected(selectedCity) }
 
-    // ✅ 下拉刷新相關狀態
+    // ✅ 下拉刷新狀態
     val pullToRefreshState = rememberPullToRefreshState()
     var isRefreshing by remember { mutableStateOf(false) }
 
@@ -123,7 +123,11 @@ fun HomeScreen(navController: NavController, vm: RoomListViewModel) {
                     .padding(horizontal = 16.dp)
             ) {
                 items(roomList, key = { it.id }) { room ->
-                    RoomCard(room = room, navController = navController, grayDark = Color(0xFF424242))
+                    RoomCard(
+                        room = room,
+                        navController = navController,
+                        grayDark = Color(0xFF424242)
+                    )
                 }
             }
         }
@@ -281,7 +285,7 @@ fun RoomCard(
                         modifier = Modifier.widthIn(max = 180.dp)
                     )
                     Text(
-                        text = "${room.date ?: "未設定"} ${room.time ?: ""}",
+                        text = "${room.date.ifEmpty { "未設定" }} ${room.time.ifEmpty { "" }}",
                         fontSize = 18.sp,
                         color = Color.Black
                     )

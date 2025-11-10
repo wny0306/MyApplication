@@ -7,12 +7,12 @@ import kotlinx.coroutines.flow.Flow
 interface RoomRepository {
     fun roomsFlow(): Flow<List<MahjongRoom>>
     suspend fun getRooms(): List<MahjongRoom>
+    suspend fun getRoom(roomId: Int): MahjongRoom?
+    suspend fun getRoomMembers(roomId: Int): List<Member>
     suspend fun createRoom(room: MahjongRoom): Boolean
-    suspend fun getRoom(roomId: String): MahjongRoom?
-    suspend fun deleteRoom(roomId: String): Boolean
-    suspend fun leaveRoom(roomId: String, userId: String): Boolean
-    suspend fun isJoined(roomId: String, userId: String): Boolean
-    suspend fun getRoomMembers(roomId: String): List<Member>
-    suspend fun joinRoom(roomId: String, userId: String): Boolean
-    fun currentUserId(): String?
+    suspend fun deleteRoom(roomId: Int): Boolean
+    suspend fun leaveRoom(roomId: Int, userId: Int): Boolean
+    suspend fun isJoined(roomId: Int, userId: Int): Boolean
+    suspend fun joinRoom(roomId: Int, userId: Int): Boolean
+    fun currentUserId(): Int?
 }

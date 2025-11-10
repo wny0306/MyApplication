@@ -4,9 +4,8 @@ package com.example.myapplication.data.remote.dto
 import com.example.myapplication.domain.model.Member
 
 data class RoomDto(
-    val id: String,
-    val title: String,
-    val owner_id: String,
+    val id: Int,
+    val owner_id: Int,          // ← String → Int
     val owner_name: String? = null,
     val intro: String? = null,
     val people: Int,
