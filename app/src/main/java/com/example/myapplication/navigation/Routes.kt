@@ -8,8 +8,12 @@ sealed class Routes(val path: String) {
     data object CreateRoom : Routes("createRoom")
     data object Profile : Routes("profile")
     data object EditProfile : Routes("editProfile")
-    data object RoomDetail {
+
+    // ✅ 改為 Int 型別參數，並明確標註路由格式
+    data object RoomDetail : Routes("roomDetail/{roomId}") {
         const val route = "roomDetail/{roomId}"
-        fun create(roomId: String) = "roomDetail/$roomId"
+
+        // ✅ 以 Int 生成完整路徑
+        fun create(roomId: Int): String = "roomDetail/$roomId"
     }
 }

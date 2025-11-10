@@ -35,6 +35,7 @@ import com.linecorp.linesdk.auth.LineLoginApi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
@@ -65,13 +66,12 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
         try {
             val account = task.getResult(ApiException::class.java)
             val idToken = account.idToken ?: ""
-            val userId = account.id ?: ""
             val displayName = account.displayName ?: "Google 使用者"
             val email = account.email ?: ""
 
             Log.d("GoogleLogin", "✅ 登入成功: $displayName ($email)")
 
-            // 傳送資料到 PHP 後端
+            // 傳送資料到 PHP 後端 -> 期待回 {"success":true,"user_id":123,"name":"...","avatar_url":"..."}
             CoroutineScope(Dispatchers.IO).launch {
                 try {
                     val url = URL("http://59.127.30.235:85/api/google_login.php")
@@ -81,26 +81,33 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
                     val conn = (url.openConnection() as HttpURLConnection).apply {
                         requestMethod = "POST"
                         doOutput = true
-                        outputStream.write(postData.toByteArray())
+                        outputStream.use { it.write(postData.toByteArray()) }
                     }
 
-                    val response = BufferedReader(InputStreamReader(conn.inputStream)).use { it.readText() }
+                    val response = BufferedReader(InputStreamReader(conn.inputStream)).use { it.readLine() ?: "" }
                     Log.d("Google_DB", "伺服器回應: $response")
 
-                    // 儲存使用者資料到本地
-                    prefs.saveUser(
-                        id = userId,
-                        provider = "google",
-                        name = displayName,
-                        nickname = displayName,
-                        avatarUrl = ""
-                    )
+                    val json = runCatching { JSONObject(response) }.getOrNull()
+                    val success = json?.optBoolean("success") == true
+                    val userId = json?.optInt("user_id", -1) ?: -1
+                    val avatarUrl = json?.optString("avatar_url").orEmpty()
+                    val finalName = json?.optString("name").takeUnless { it.isNullOrBlank() } ?: displayName
 
-                    // 導向主畫面
-                    CoroutineScope(Dispatchers.Main).launch {
-                        navController.navigate("home") {
-                            popUpTo("login") { inclusive = true }
+                    if (success && userId > 0) {
+                        prefs.saveUser(
+                            id = userId,                 // ✅ Int
+                            provider = "google",
+                            name = finalName,
+                            nickname = finalName,
+                            avatarUrl = avatarUrl
+                        )
+                        CoroutineScope(Dispatchers.Main).launch {
+                            navController.navigate("home") {
+                                popUpTo("login") { inclusive = true }
+                            }
                         }
+                    } else {
+                        Log.e("Google_DB", "❌ 後端回傳失敗或 user_id 無效")
                     }
                 } catch (e: Exception) {
                     Log.e("Google_DB", "上傳失敗: ${e.message}")
@@ -121,39 +128,49 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
             when (loginResult.responseCode?.name) {
                 "SUCCESS" -> {
                     val profile = loginResult.lineProfile
-                    val userId = profile?.userId ?: ""
+                    val lineUid = profile?.userId ?: ""
                     val displayName = profile?.displayName ?: "LINE 使用者"
                     val pictureUrl = profile?.pictureUrl?.toString() ?: ""
 
-                    Log.d("LINE_LOGIN", "✅ 登入成功: $displayName ($userId)")
+                    Log.d("LINE_LOGIN", "✅ 登入成功: $displayName ($lineUid)")
 
                     CoroutineScope(Dispatchers.IO).launch {
                         try {
+                            // 後端應該回 {"success":true,"user_id":123,"name":"...","avatar_url":"..."}
                             val url = URL("http://59.127.30.235:85/api/api_line_login.php")
                             val postData =
-                                "userId=$userId&displayName=${Uri.encode(displayName)}&pictureUrl=${Uri.encode(pictureUrl)}"
+                                "userId=${Uri.encode(lineUid)}&displayName=${Uri.encode(displayName)}&pictureUrl=${Uri.encode(pictureUrl)}"
 
                             val conn = (url.openConnection() as HttpURLConnection).apply {
                                 requestMethod = "POST"
                                 doOutput = true
-                                outputStream.write(postData.toByteArray())
+                                outputStream.use { it.write(postData.toByteArray()) }
                             }
 
-                            val response = conn.inputStream.bufferedReader().readText()
+                            val response = conn.inputStream.bufferedReader().use { it.readLine() ?: "" }
                             Log.d("LINE_DB", "伺服器回應: $response")
 
-                            prefs.saveUser(
-                                id = userId,
-                                provider = "line",
-                                name = displayName,
-                                nickname = displayName, // 初始暱稱 = 官方名稱
-                                avatarUrl = pictureUrl
-                            )
+                            val json = runCatching { JSONObject(response) }.getOrNull()
+                            val success = json?.optBoolean("success") == true
+                            val userId = json?.optInt("user_id", -1) ?: -1
+                            val nameFromServer = json?.optString("name").orEmpty()
+                            val avatarFromServer = json?.optString("avatar_url").orEmpty()
 
-                            CoroutineScope(Dispatchers.Main).launch {
-                                navController.navigate("home") {
-                                    popUpTo("login") { inclusive = true }
+                            if (success && userId > 0) {
+                                prefs.saveUser(
+                                    id = userId,           // ✅ Int
+                                    provider = "line",
+                                    name = nameFromServer.ifEmpty { displayName },
+                                    nickname = nameFromServer.ifEmpty { displayName },
+                                    avatarUrl = avatarFromServer.ifEmpty { pictureUrl }
+                                )
+                                CoroutineScope(Dispatchers.Main).launch {
+                                    navController.navigate("home") {
+                                        popUpTo("login") { inclusive = true }
+                                    }
                                 }
+                            } else {
+                                Log.e("LINE_DB", "❌ 後端回傳失敗或 user_id 無效")
                             }
                         } catch (e: Exception) {
                             Log.e("LINE_DB", "上傳失敗: ${e.message}")
@@ -263,7 +280,7 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
                 }
             }
 
-            // 開發者登入
+            // 開發者登入（本地預設 Int ID）
             OutlinedTextField(
                 value = devPassword,
                 onValueChange = { devPassword = it },
@@ -277,7 +294,7 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
                     if (devPassword == developerPass) {
                         CoroutineScope(Dispatchers.IO).launch {
                             prefs.saveUser(
-                                id = "dev_user",
+                                id = 1,
                                 provider = "developer",
                                 name = "Developer",
                                 nickname = "Developer",

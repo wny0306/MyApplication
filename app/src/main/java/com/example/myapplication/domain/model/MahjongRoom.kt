@@ -1,12 +1,10 @@
 package com.example.myapplication.domain.model
 
-import java.util.UUID
 import com.example.myapplication.data.remote.dto.RoomDto
 
 data class MahjongRoom(
-    val id: String = UUID.randomUUID().toString(),
-    val title: String,
-    val ownerId: String,
+    val id: Int,
+    val ownerId: Int,
     val ownerName: String? = null,
     val people: Int,
     val flower: Boolean,
@@ -26,10 +24,10 @@ data class MahjongRoom(
     val memberCount: Int = 0
 )
 
+
 // ✅ DTO → Domain
 fun RoomDto.toDomain() = MahjongRoom(
     id = id,
-    title = title,
     ownerId = owner_id,
     ownerName = owner_name,
     people = people,
@@ -51,7 +49,6 @@ fun RoomDto.toDomain() = MahjongRoom(
 // Domain → DTO
 fun MahjongRoom.toDto() = RoomDto(
     id = id,
-    title = title,
     owner_id = ownerId,
     people = people,
     flower = flower,

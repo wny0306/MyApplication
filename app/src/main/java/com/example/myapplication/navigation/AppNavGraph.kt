@@ -1,6 +1,12 @@
 package com.example.myapplication.navigation
 
+import android.annotation.SuppressLint
+import android.content.Context
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -20,14 +26,25 @@ import com.example.myapplication.feature.profile.MatchHistoryScreen
 import com.example.myapplication.feature.profile.CreateHistoryScreen
 import com.example.myapplication.feature.roomdetail.RoomDetailScreen
 
+// 簡單的 ViewModel Factory，注入 Context
+private class RoomListVMFactory(private val context: Context) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        return RoomListViewModel(context) as T
+    }
+}
+
+@SuppressLint("NewApi") // 屏蔽因 @RequiresApi 造成的呼叫警告（LoginScreen/HomeScreen）
 @Composable
 fun AppNavGraph() {
     val navController = rememberNavController()
-    val roomListViewModel: RoomListViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+    val context = LocalContext.current
+    val roomListViewModel: RoomListViewModel =
+        viewModel(factory = RoomListVMFactory(context))
 
     NavHost(
         navController = navController,
-        startDestination = "splash" // ✅ 修改：啟動先進入 SplashScreen
+        startDestination = "splash"
     ) {
         composable("splash") { SplashScreen(navController) }
 
@@ -42,12 +59,12 @@ fun AppNavGraph() {
         composable("createHistory") { CreateHistoryScreen(navController) }
         composable("about") { AboutScreen(navController) }
 
-
+        // ✅ RoomDetail 改為 Int 參數
         composable(
-            route = Routes.RoomDetail.route,
-            arguments = listOf(navArgument("roomId") { type = NavType.StringType })
+            route = Routes.RoomDetail.route, // "roomDetail/{roomId}"
+            arguments = listOf(navArgument("roomId") { type = NavType.IntType })
         ) { backStackEntry ->
-            val roomId = backStackEntry.arguments?.getString("roomId")
+            val roomId: Int? = backStackEntry.arguments?.getInt("roomId")
             RoomDetailScreen(navController, roomId, roomListViewModel)
         }
     }

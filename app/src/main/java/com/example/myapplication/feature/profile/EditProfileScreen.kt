@@ -33,6 +33,7 @@ import com.example.myapplication.data.datasource.local.UserPreferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
@@ -46,40 +47,33 @@ fun EditProfileScreen(
 ) {
     val context = LocalContext.current
     val prefs = remember { UserPreferences(context) }
+
     val nickname by viewModel.nickname.collectAsState()
     val avatarUri by viewModel.avatarUri.collectAsState()
 
     var tempNickname by remember { mutableStateOf("") }
     var showDialog by remember { mutableStateOf(false) }
 
-    // ✅ 初始化時載入現有資料
-    LaunchedEffect(Unit) {
-        viewModel.load(context)
-    }
+    // 進入畫面載入一次
+    LaunchedEffect(Unit) { viewModel.load(context) }
 
-    // ✅ 同步 nickname
+    // 將 vm 的暱稱帶到輸入框
     LaunchedEffect(nickname) {
-        if (nickname.isNotBlank() && nickname != "暱稱") {
-            tempNickname = nickname
-        }
+        if (nickname.isNotBlank() && nickname != "暱稱") tempNickname = nickname
     }
 
-    // 📸 相簿選擇
+    // 相簿
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
-        uri?.let {
-            viewModel.saveAvatarUri(context, it)
-        }
+        uri?.let { viewModel.saveAvatarUri(context, it) }
     }
 
-    // 📷 拍照
+    // 拍照
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicturePreview()
     ) { bitmap ->
-        bitmap?.let {
-            viewModel.saveAvatarBitmap(context, it)
-        }
+        bitmap?.let { viewModel.saveAvatarBitmap(context, it) }
     }
 
     Scaffold(
@@ -101,7 +95,7 @@ fun EditProfileScreen(
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // 🔹 頭像顯示區
+            // 頭像
             Box(
                 modifier = Modifier
                     .size(120.dp)
@@ -132,7 +126,7 @@ fun EditProfileScreen(
 
             Spacer(Modifier.height(32.dp))
 
-            // 🔹 暱稱輸入框
+            // 暱稱
             OutlinedTextField(
                 value = tempNickname,
                 onValueChange = { tempNickname = it },
@@ -142,34 +136,58 @@ fun EditProfileScreen(
 
             Spacer(Modifier.height(32.dp))
 
-            // 🔹 儲存按鈕
+            // 儲存
             Button(
                 onClick = {
                     CoroutineScope(Dispatchers.IO).launch {
-                        val user = prefs.getUser()
-                        val userId = user?.id ?: return@launch
-                        val provider = user?.provider ?: "google"
+                        val user = prefs.getUser() ?: run {
+                            CoroutineScope(Dispatchers.Main).launch {
+                                Toast.makeText(context, "尚未登入", Toast.LENGTH_SHORT).show()
+                            }
+                            return@launch
+                        }
+
+                        val userId = user.id                // Int
+                        val provider = user.provider        // String
                         val avatarUrl = avatarUri?.toString() ?: ""
 
                         try {
                             val url = URL("http://59.127.30.235:85/api/update_profile.php")
                             val postData =
-                                "user_id=${Uri.encode(userId)}&provider=${Uri.encode(provider)}" +
-                                        "&nickname=${Uri.encode(tempNickname)}&avatar_url=${Uri.encode(avatarUrl)}"
+                                "user_id=${Uri.encode(userId.toString())}" + // ✅ Int 轉字串再 encode
+                                        "&provider=${Uri.encode(provider)}" +
+                                        "&nickname=${Uri.encode(tempNickname)}" +
+                                        "&avatar_url=${Uri.encode(avatarUrl)}"
 
                             val conn = (url.openConnection() as HttpURLConnection).apply {
                                 requestMethod = "POST"
                                 doOutput = true
-                                outputStream.write(postData.toByteArray())
+                                outputStream.use { it.write(postData.toByteArray()) }
                             }
 
                             val response = BufferedReader(InputStreamReader(conn.inputStream)).use { it.readText() }
-                            println("🔥 UpdateProfile Response: $response")
 
-                            CoroutineScope(Dispatchers.Main).launch {
-                                Toast.makeText(context, "更新成功！", Toast.LENGTH_SHORT).show()
-                                navController.navigate("home") {
-                                    popUpTo("editProfile") { inclusive = true }
+                            // 解析可選：若後端回 {"success":true}
+                            val ok = runCatching { JSONObject(response).optBoolean("success", true) }.getOrDefault(true)
+
+                            if (ok) {
+                                // 本地也更新暱稱與頭像
+                                prefs.saveUser(
+                                    id = userId,
+                                    provider = provider,
+                                    name = user.name, // 不改名
+                                    nickname = tempNickname,
+                                    avatarUrl = avatarUrl
+                                )
+                                CoroutineScope(Dispatchers.Main).launch {
+                                    Toast.makeText(context, "更新成功！", Toast.LENGTH_SHORT).show()
+                                    navController.navigate("profile") {
+                                        popUpTo("editProfile") { inclusive = true }
+                                    }
+                                }
+                            } else {
+                                CoroutineScope(Dispatchers.Main).launch {
+                                    Toast.makeText(context, "更新失敗", Toast.LENGTH_SHORT).show()
                                 }
                             }
                         } catch (e: Exception) {
@@ -193,7 +211,7 @@ fun EditProfileScreen(
         }
     }
 
-    // 🔹 選擇頭貼來源 Dialog
+    // 選擇頭貼來源 Dialog
     if (showDialog) {
         AlertDialog(
             onDismissRequest = { showDialog = false },
@@ -233,9 +251,7 @@ fun EditProfileScreen(
             },
             confirmButton = {},
             dismissButton = {
-                TextButton(onClick = { showDialog = false }) {
-                    Text("取消")
-                }
+                TextButton(onClick = { showDialog = false }) { Text("取消") }
             }
         )
     }
