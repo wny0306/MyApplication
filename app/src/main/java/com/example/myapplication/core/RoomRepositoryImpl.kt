@@ -7,7 +7,7 @@ import com.example.myapplication.data.repository.RoomRepository
 import com.example.myapplication.domain.model.MahjongRoom
 import com.example.myapplication.domain.model.Member
 import io.ktor.client.HttpClient
-import io.ktor.client.engine.cio.CIO
+import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
 import io.ktor.client.request.post
@@ -23,8 +23,10 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
 
 class RoomRepositoryImpl(
-    private val context: Context,                  
-    private val client: HttpClient = HttpClient(CIO)
+    private val context: Context,
+    private val client: HttpClient = HttpClient(OkHttp) {
+        expectSuccess = false
+    }
 ) : RoomRepository {
 
     private val baseUrl = "http://59.127.30.235:85/api"
@@ -39,6 +41,7 @@ class RoomRepositoryImpl(
     override suspend fun getRooms(): List<MahjongRoom> = withContext(Dispatchers.IO) {
         try {
             val res: HttpResponse = client.get("$baseUrl/get_rooms.php") {
+                // GET 不需要 contentType，但保留不影響
                 contentType(ContentType.Application.Json)
             }
             val text = res.bodyAsText()
@@ -84,7 +87,8 @@ class RoomRepositoryImpl(
     override suspend fun getRoom(roomId: Int): MahjongRoom? = withContext(Dispatchers.IO) {
         try {
             val res: HttpResponse = client.get("$baseUrl/get_room_detail.php") {
-                parameter("room_id", roomId) // Int 參數
+                parameter("room_id", roomId)
+                parameter("_ts", System.currentTimeMillis())
             }
             val text = res.bodyAsText()
             Log.d("RoomRepo", "get_room_detail.php -> $text")
@@ -137,6 +141,7 @@ class RoomRepositoryImpl(
         try {
             val res: HttpResponse = client.get("$baseUrl/get_members.php") {
                 parameter("room_id", roomId)
+                parameter("_ts", System.currentTimeMillis())
             }
             val text = res.bodyAsText()
             Log.d("RoomRepo", "get_members.php -> $text")
@@ -165,7 +170,7 @@ class RoomRepositoryImpl(
     override suspend fun createRoom(room: MahjongRoom): Boolean = withContext(Dispatchers.IO) {
         try {
             val payload = buildJsonObject {
-                put("owner_id", room.ownerId)      
+                put("owner_id", room.ownerId)
                 put("people", room.people)
                 put("flower", if (room.flower) 1 else 0)
 
@@ -186,7 +191,7 @@ class RoomRepositoryImpl(
             Log.d("RoomRepo", "create_room payload = $payload")
             val res: HttpResponse = client.post("$baseUrl/create_room.php") {
                 contentType(ContentType.Application.Json)
-                setBody(payload.toString())
+                setBody(payload.toString()) // 純字串 JSON
             }
 
             val text = res.bodyAsText()
@@ -199,13 +204,12 @@ class RoomRepositoryImpl(
         }
     }
 
-
     override suspend fun deleteRoom(roomId: Int): Boolean = withContext(Dispatchers.IO) {
         try {
             val payload = buildJsonObject { put("room_id", roomId) }
             val res: HttpResponse = client.post("$baseUrl/delete_room.php") {
                 contentType(ContentType.Application.Json)
-                setBody(payload.toString())
+                setBody(payload.toString()) // 純字串 JSON
             }
             val text = res.bodyAsText()
             Log.d("RoomRepo", "delete_room.php -> $text")
@@ -225,7 +229,7 @@ class RoomRepositoryImpl(
             }
             val res: HttpResponse = client.post("$baseUrl/leave_room.php") {
                 contentType(ContentType.Application.Json)
-                setBody(payload.toString())
+                setBody(payload.toString()) // 純字串 JSON
             }
             val text = res.bodyAsText()
             Log.d("RoomRepo", "leave_room.php -> $text")
@@ -243,14 +247,15 @@ class RoomRepositoryImpl(
                 put("room_id", roomId)
                 put("user_id", userId)
             }
-            val res: HttpResponse = client.post("$baseUrl/is_joined.php") {
+            val res: HttpResponse = client.post("$baseUrl/is_join.php") { // <-- 檔名修正
                 contentType(ContentType.Application.Json)
-                setBody(payload) // Ktor 會處理 JsonElement
+                setBody(payload.toString()) // 純字串 JSON
             }
             val text = res.bodyAsText()
-            Log.d("RoomRepo", "is_joined.php -> $text")
+            Log.d("RoomRepo", "is_join.php -> $text")
             val json = Json.parseToJsonElement(text).jsonObject
-            json["is_joined"]?.jsonPrimitive?.booleanOrNull ?: false
+            json["success"]?.jsonPrimitive?.booleanOrNull == true &&
+                    json["is_joined"]?.jsonPrimitive?.booleanOrNull == true
         } catch (e: Exception) {
             Log.e("RoomRepo", "isJoined error: ${e.message}", e)
             false
@@ -265,7 +270,7 @@ class RoomRepositoryImpl(
             }
             val res: HttpResponse = client.post("$baseUrl/join_room.php") {
                 contentType(ContentType.Application.Json)
-                setBody(payload) // Ktor 會處理 JsonElement
+                setBody(payload.toString()) // 純字串 JSON
             }
             val text = res.bodyAsText()
             Log.d("RoomRepo", "join_room.php -> $text")

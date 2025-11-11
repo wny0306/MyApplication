@@ -49,16 +49,16 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
     val prefs = remember { UserPreferences(ctx) }
     var devPassword by remember { mutableStateOf("") }
     val developerPass = "1"
-
-    // ---------- Google Sign-In ----------
     val gso = remember {
         GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestIdToken("213521066881-nttt15ipnd5mg500oeu0an81bq7ejthf.apps.googleusercontent.com") // Web client ID
+            .requestIdToken("213521066881-nttt15ipnd5mg500oeu0an81bq7ejthf.apps.googleusercontent.com")
             .requestEmail()
             .build()
     }
     val googleSignInClient = remember { GoogleSignIn.getClient(ctx, gso) }
 
+
+    // -------------- Google Sign-In 回呼 --------------
     val googleLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -67,11 +67,10 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
             val account = task.getResult(ApiException::class.java)
             val idToken = account.idToken ?: ""
             val displayName = account.displayName ?: "Google 使用者"
-            val email = account.email ?: ""
+            val email = account.email.orEmpty()
 
-            Log.d("GoogleLogin", "✅ 登入成功: $displayName ($email)")
+            Log.d("GoogleLogin", "✅ OAuth 成功: $displayName ($email)")
 
-            // 傳送資料到 PHP 後端 -> 期待回 {"success":true,"user_id":123,"name":"...","avatar_url":"..."}
             CoroutineScope(Dispatchers.IO).launch {
                 try {
                     val url = URL("http://59.127.30.235:85/api/google_login.php")
@@ -81,25 +80,36 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
                     val conn = (url.openConnection() as HttpURLConnection).apply {
                         requestMethod = "POST"
                         doOutput = true
-                        outputStream.use { it.write(postData.toByteArray()) }
+                        connectTimeout = 15000
+                        readTimeout = 15000
+                        setRequestProperty(
+                            "Content-Type",
+                            "application/x-www-form-urlencoded; charset=UTF-8"
+                        )
+                        outputStream.use { it.write(postData.toByteArray(Charsets.UTF_8)) }
                     }
 
-                    val response = BufferedReader(InputStreamReader(conn.inputStream)).use { it.readLine() ?: "" }
-                    Log.d("Google_DB", "伺服器回應: $response")
+                    val code = conn.responseCode
+                    val body = try {
+                        (if (code in 200..299) conn.inputStream else conn.errorStream)
+                            ?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
+                    } finally { conn.disconnect() }
 
-                    val json = runCatching { JSONObject(response) }.getOrNull()
+                    Log.d("Google_DB", "HTTP $code body=$body")
+
+                    val json = runCatching { JSONObject(body) }.getOrNull()
                     val success = json?.optBoolean("success") == true
-                    val userId = json?.optInt("user_id", -1) ?: -1
-                    val avatarUrl = json?.optString("avatar_url").orEmpty()
-                    val finalName = json?.optString("name").takeUnless { it.isNullOrBlank() } ?: displayName
+                    val userId = json?.optInt("user_id", -1) ?: -1   // 這裡要回全域 users.id (Int)
+                    val nameFromServer = json?.optString("name").orEmpty()
+                    val avatarFromServer = json?.optString("avatar_url").orEmpty()
 
-                    if (success && userId > 0) {
+                    if (code in 200..299 && success && userId > 0) {
                         prefs.saveUser(
-                            id = userId,                 // ✅ Int
+                            id = userId,                            // ✅ Int（全域 users.id）
                             provider = "google",
-                            name = finalName,
-                            nickname = finalName,
-                            avatarUrl = avatarUrl
+                            name = nameFromServer.ifEmpty { displayName },
+                            nickname = nameFromServer.ifEmpty { displayName },
+                            avatarUrl = avatarFromServer
                         )
                         CoroutineScope(Dispatchers.Main).launch {
                             navController.navigate("home") {
@@ -107,18 +117,18 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
                             }
                         }
                     } else {
-                        Log.e("Google_DB", "❌ 後端回傳失敗或 user_id 無效")
+                        Log.e("Google_DB", "❌ 後端失敗或 user_id 無效 (code=$code)")
                     }
                 } catch (e: Exception) {
-                    Log.e("Google_DB", "上傳失敗: ${e.message}")
+                    Log.e("Google_DB", "❌ 例外: ${e.message}")
                 }
             }
         } catch (e: ApiException) {
-            Log.e("GoogleLogin", "❌ 登入失敗: ${e.statusCode}")
+            Log.e("GoogleLogin", "❌ OAuth 失敗: ${e.statusCode}")
         }
     }
 
-    // ---------- LINE Login ----------
+    // -------------- LINE Login 回呼 --------------
     val lineLoginLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -128,15 +138,14 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
             when (loginResult.responseCode?.name) {
                 "SUCCESS" -> {
                     val profile = loginResult.lineProfile
-                    val lineUid = profile?.userId ?: ""
+                    val lineUid = profile?.userId.orEmpty()          // provider_id
                     val displayName = profile?.displayName ?: "LINE 使用者"
-                    val pictureUrl = profile?.pictureUrl?.toString() ?: ""
+                    val pictureUrl = profile?.pictureUrl?.toString().orEmpty()
 
-                    Log.d("LINE_LOGIN", "✅ 登入成功: $displayName ($lineUid)")
+                    Log.d("LINE_LOGIN", "✅ OAuth 成功: $displayName ($lineUid)")
 
                     CoroutineScope(Dispatchers.IO).launch {
                         try {
-                            // 後端應該回 {"success":true,"user_id":123,"name":"...","avatar_url":"..."}
                             val url = URL("http://59.127.30.235:85/api/api_line_login.php")
                             val postData =
                                 "userId=${Uri.encode(lineUid)}&displayName=${Uri.encode(displayName)}&pictureUrl=${Uri.encode(pictureUrl)}"
@@ -144,21 +153,32 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
                             val conn = (url.openConnection() as HttpURLConnection).apply {
                                 requestMethod = "POST"
                                 doOutput = true
-                                outputStream.use { it.write(postData.toByteArray()) }
+                                connectTimeout = 15000
+                                readTimeout = 15000
+                                setRequestProperty(
+                                    "Content-Type",
+                                    "application/x-www-form-urlencoded; charset=UTF-8"
+                                )
+                                outputStream.use { it.write(postData.toByteArray(Charsets.UTF_8)) }
                             }
 
-                            val response = conn.inputStream.bufferedReader().use { it.readLine() ?: "" }
-                            Log.d("LINE_DB", "伺服器回應: $response")
+                            val code = conn.responseCode
+                            val body = try {
+                                (if (code in 200..299) conn.inputStream else conn.errorStream)
+                                    ?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
+                            } finally { conn.disconnect() }
 
-                            val json = runCatching { JSONObject(response) }.getOrNull()
+                            Log.d("LINE_DB", "HTTP $code body=$body")
+
+                            val json = runCatching { JSONObject(body) }.getOrNull()
                             val success = json?.optBoolean("success") == true
-                            val userId = json?.optInt("user_id", -1) ?: -1
+                            val userId = json?.optInt("user_id", -1) ?: -1   // 回全域 users.id
                             val nameFromServer = json?.optString("name").orEmpty()
                             val avatarFromServer = json?.optString("avatar_url").orEmpty()
 
-                            if (success && userId > 0) {
+                            if (code in 200..299 && success && userId > 0) {
                                 prefs.saveUser(
-                                    id = userId,           // ✅ Int
+                                    id = userId,                         // ✅ Int（全域）
                                     provider = "line",
                                     name = nameFromServer.ifEmpty { displayName },
                                     nickname = nameFromServer.ifEmpty { displayName },
@@ -170,17 +190,17 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
                                     }
                                 }
                             } else {
-                                Log.e("LINE_DB", "❌ 後端回傳失敗或 user_id 無效")
+                                Log.e("LINE_DB", "❌ 後端失敗或 user_id 無效 (code=$code)")
                             }
                         } catch (e: Exception) {
-                            Log.e("LINE_DB", "上傳失敗: ${e.message}")
+                            Log.e("LINE_DB", "❌ 例外: ${e.message}")
                         }
                     }
                 }
-                else -> Log.e("LINE_LOGIN", "登入失敗: ${loginResult.errorData.message}")
+                else -> Log.e("LINE_LOGIN", "❌ OAuth 失敗: ${loginResult.errorData.message}")
             }
         } catch (e: Exception) {
-            Log.e("LINE_LOGIN", "例外：${e.stackTraceToString()}")
+            Log.e("LINE_LOGIN", "❌ 例外：${e.stackTraceToString()}")
         }
     }
 
@@ -294,7 +314,7 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
                     if (devPassword == developerPass) {
                         CoroutineScope(Dispatchers.IO).launch {
                             prefs.saveUser(
-                                id = 1,
+                                id = 1,                    // ✅ Int
                                 provider = "developer",
                                 name = "Developer",
                                 nickname = "Developer",
