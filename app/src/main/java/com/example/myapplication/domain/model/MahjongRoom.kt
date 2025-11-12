@@ -65,4 +65,3 @@ fun MahjongRoom.toDto() = RoomDto(
     created_at = createdAt,
     updated_at = updatedAt
 )
-
