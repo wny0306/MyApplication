@@ -51,7 +51,7 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
     val developerPass = "1"
     val gso = remember {
         GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestIdToken("213521066881-nttt15ipnd5mg500oeu0an81bq7ejthf.apps.googleusercontent.com")
+            .requestIdToken("213521066881-nttt15ipnd5mg500oeu0an81bq7ejthf.apps.googleusercontent.c")
             .requestEmail()
             .build()
     }
@@ -99,13 +99,13 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
 
                     val json = runCatching { JSONObject(body) }.getOrNull()
                     val success = json?.optBoolean("success") == true
-                    val userId = json?.optInt("user_id", -1) ?: -1   // 這裡要回全域 users.id (Int)
+                    val userId = json?.optInt("user_id", -1) ?: -1
                     val nameFromServer = json?.optString("name").orEmpty()
                     val avatarFromServer = json?.optString("avatar_url").orEmpty()
 
                     if (code in 200..299 && success && userId > 0) {
                         prefs.saveUser(
-                            id = userId,                            // ✅ Int（全域 users.id）
+                            id = userId,
                             provider = "google",
                             name = nameFromServer.ifEmpty { displayName },
                             nickname = nameFromServer.ifEmpty { displayName },
