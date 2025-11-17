@@ -211,7 +211,9 @@ fun RoomCard(
             .fillMaxWidth()
             .padding(vertical = 8.dp)
             .clickable { navController.navigate(Routes.RoomDetail.create(room.id)) },
-        colors = CardDefaults.cardColors(containerColor = Color.LightGray.copy(alpha = 0.6f))
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
