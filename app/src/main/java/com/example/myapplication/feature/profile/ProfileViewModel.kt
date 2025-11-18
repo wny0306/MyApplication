@@ -6,12 +6,14 @@ import android.net.Uri
 import android.util.Log
 import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.example.myapplication.data.datasource.AuthRepositoryImpl
 import com.example.myapplication.data.datasource.local.UserPreferences
 import com.example.myapplication.data.repository.AuthRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.BufferedWriter
@@ -22,13 +24,13 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 import java.util.*
-import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.launch
 
 private const val PREFS = "profile_prefs"
-private const val KEY_NICK = "nickname"
 private const val KEY_AVATAR = "avatar_uri"
 private const val KEY_INTRO = "intro"
+
+private const val GET_PROFILE_URL =
+    "http://59.127.30.235:85/api/get_profile.php"
 
 private const val UPDATE_PROFILE_URL =
     "http://59.127.30.235:85/api/update_profile.php"
@@ -46,150 +48,110 @@ class ProfileViewModel(
     private val _avatarUri = MutableStateFlow<Uri?>(null)
     val avatarUri: StateFlow<Uri?> = _avatarUri
 
-    // 自我介紹
     private val _intro = MutableStateFlow("")
     val intro: StateFlow<String> = _intro
 
-    // 🧠 載入使用者資料（帳號、暱稱、頭貼、自我介紹）
+    /** ⭐ 載入個人資料 */
     fun load(ctx: Context) {
         _username.value = auth.currentUser(ctx) ?: "訪客"
-        viewModelScope.launch {
-            loadProfileFromServer(ctx)
-        }
+        viewModelScope.launch { loadProfileFromServer(ctx) }
     }
+
+    /**
+     * ⭐ 從後端使用 user_id 撈使用者資料
+     * 不再使用 provider + provider_id
+     */
     private suspend fun loadProfileFromServer(ctx: Context) {
         withContext(Dispatchers.IO) {
             try {
                 val userPrefs = UserPreferences(ctx)
-                val user = userPrefs.getUser() ?: run {
-                    Log.e("Profile", "loadProfileFromServer: user is null")
-                    return@withContext
-                }
+                val user = userPrefs.getUser() ?: return@withContext
 
-                val userId = user.id
-                val provider = user.provider
+                val url = URL("$GET_PROFILE_URL?user_id=${user.id}")   // ⭐ 只用 user_id
 
-                // 假設有一支 API：get_profile.php?user_id=&provider=
-                val query = "user_id=${URLEncoder.encode(userId.toString(), "UTF-8")}" +
-                        "&provider=${URLEncoder.encode(provider, "UTF-8")}"
-
-                val url = URL("http://59.127.30.235:85/api/update_profile.php?$query")
                 val conn = (url.openConnection() as HttpURLConnection).apply {
                     requestMethod = "GET"
                     connectTimeout = 8000
                     readTimeout = 8000
                 }
 
-                val code = conn.responseCode
-                val responseText = if (code in 200..299) {
+                val responseText =
                     conn.inputStream.bufferedReader().use { it.readText() }
-                } else {
-                    conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
-                }
                 conn.disconnect()
 
-                Log.d("Profile", "get_profile response($code): $responseText")
+                Log.d("Profile", "get_profile response: $responseText")
 
-                val json = try {
-                    JSONObject(responseText)
-                } catch (e: Exception) {
-                    Log.e("Profile", "解析 profile JSON 失敗", e)
-                    null
-                } ?: return@withContext
-
-                val success = json.optBoolean("success", false)
-                if (!success) {
-                    Log.e("Profile", "get_profile 後端回傳失敗: ${json.optString("message")}")
+                val json = JSONObject(responseText)
+                if (!json.optBoolean("success", false)) {
+                    Log.e("Profile", "後端回傳錯誤: ${json.optString("message")}")
                     return@withContext
                 }
 
-                // 假設資料在 data 裡
-                val data = json.optJSONObject("data") ?: json
+                val data = json.optJSONObject("data") ?: return@withContext
+
                 val nicknameFromServer = data.optString("nickname", "暱稱")
                 val avatarUrlFromServer = data.optString("avatar_url", "")
                 val introFromServer = data.optString("intro", "")
 
-                // 回到主執行緒更新 UI state
                 withContext(Dispatchers.Main) {
                     _nickname.value = nicknameFromServer
                     _intro.value = introFromServer
-
-                    _avatarUri.value = avatarUrlFromServer
-                        .takeIf { it.isNotBlank() }
-                        ?.let { Uri.parse(it) }
+                    _avatarUri.value =
+                        if (avatarUrlFromServer.isNotBlank()) Uri.parse(avatarUrlFromServer)
+                        else null
                 }
 
             } catch (e: Exception) {
-                Log.e("Profile", "loadProfileFromServer 失敗", e)
+                Log.e("Profile", "loadProfileFromServer error", e)
             }
         }
     }
-//    fun saveNicknameInMemory(nickname: String) {
-//        _nickname.value = nickname
-//    }
+
+    /** 本地更新暱稱（更新後端成功後呼叫） */
     fun updateNicknameInMemory(newNickname: String) {
         _nickname.value = newNickname
     }
 
-    // 💾 儲存相簿選擇的頭貼 URI（本機）
+    /** 儲存相簿頭貼 */
     fun saveAvatarUri(ctx: Context, uri: Uri?) {
         val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        if (uri != null) {
+        if (uri != null)
             prefs.edit().putString(KEY_AVATAR, uri.toString()).apply()
-        } else {
+        else
             prefs.edit().remove(KEY_AVATAR).apply()
-        }
+
         _avatarUri.value = uri
     }
 
-    // 📸 儲存拍照 Bitmap（本機）
+    /** 儲存拍照頭貼 */
     fun saveAvatarBitmap(ctx: Context, bitmap: Bitmap) {
         try {
             val file = File(ctx.filesDir, "avatar_${UUID.randomUUID()}.jpg")
             FileOutputStream(file).use { out ->
                 bitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)
             }
-            val uri = FileProvider.getUriForFile(ctx, ctx.packageName + ".provider", file)
+            val uri =
+                FileProvider.getUriForFile(ctx, ctx.packageName + ".provider", file)
             saveAvatarUri(ctx, uri)
-            Log.d("Profile", "已儲存拍照頭貼至：$uri")
         } catch (e: Exception) {
             Log.e("Profile", "儲存頭貼失敗", e)
         }
     }
 
     /**
-     * 儲存自我介紹：
-     * 1. 先更新本機 SharedPreferences
-     * 2. 再呼叫後端 update_profile.php，把 intro 一起更新到 users 表
+     * ⭐ 儲存自我介紹到後端
+     * 注意：update_profile.php 是用 user_id 更新（不是 provider_id）
      */
     suspend fun saveIntro(ctx: Context, intro: String): Boolean {
         return withContext(Dispatchers.IO) {
             try {
-                // 1) 先更新本機
-                val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                prefs.edit().putString(KEY_INTRO, intro).apply()
-
-                // 2) 取得目前登入使用者資訊（user_id / provider）
                 val userPrefs = UserPreferences(ctx)
-                val user = userPrefs.getUser()
-                if (user == null) {
-                    Log.e("Profile", "saveIntro: User is null, 無法呼叫後端")
-                    _intro.value = intro
-                    return@withContext false
-                }
+                val user = userPrefs.getUser() ?: return@withContext false
 
-                val userId = user.id           // 假設 UserData 有 id:Int
-                val provider = user.provider   // 已知有 provider 屬性
-                val nicknameNow = _nickname.value
-                val avatarUrlNow = _avatarUri.value?.toString() ?: ""
-
-                // 3) 準備 POST 資料（x-www-form-urlencoded）
                 val params = listOf(
-                    "user_id" to userId.toString(),
-                    "provider" to provider,
-                    "provider_id" to userId.toString(), // 目前用 userId 當 provider_id
-                    "nickname" to nicknameNow,
-                    "avatar_url" to avatarUrlNow,
+                    "user_id" to user.id.toString(),
+                    "nickname" to _nickname.value,
+                    "avatar_url" to (_avatarUri.value?.toString() ?: ""),
                     "intro" to intro
                 )
 
@@ -202,7 +164,6 @@ class ProfileViewModel(
                     requestMethod = "POST"
                     connectTimeout = 8000
                     readTimeout = 8000
-                    doInput = true
                     doOutput = true
                     setRequestProperty(
                         "Content-Type",
@@ -210,7 +171,6 @@ class ProfileViewModel(
                     )
                 }
 
-                // 寫出 POST body
                 BufferedWriter(OutputStreamWriter(conn.outputStream, "UTF-8")).use { writer ->
                     writer.write(postData)
                     writer.flush()
@@ -226,30 +186,22 @@ class ProfileViewModel(
 
                 Log.d("Profile", "update_profile response($code): $responseText")
 
-                val json = try {
-                    JSONObject(responseText)
-                } catch (e: Exception) {
-                    Log.e("Profile", "解析 JSON 失敗", e)
-                    null
-                }
+                val json = JSONObject(responseText)
+                val success = json.optBoolean("success", false)
 
-                val success = json?.optBoolean("success", false) ?: false
                 if (success) {
                     _intro.value = intro
-                    true
-                } else {
-                    // 後端回傳失敗時你可以看 message
-                    val msg = json?.optString("message")
-                    Log.e("Profile", "後端更新失敗: $msg")
-                    false
                 }
+
+                success
+
             } catch (e: Exception) {
-                Log.e("Profile", "儲存自我介紹 / 呼叫後端失敗", e)
+                Log.e("Profile", "saveIntro error", e)
                 false
             }
         }
     }
 
-    // 🚪 登出
+    /** 登出 */
     fun logout(ctx: Context) = auth.logout(ctx)
 }
