@@ -32,7 +32,7 @@ class UserPreferences(private val context: Context) {
         id: Int,
         provider: String,
         name: String,
-        nickname: String,
+        nickname: String,   // 參數先保留，不用它
         avatarUrl: String
     ) = withContext(Dispatchers.IO) {
         prefs.edit()
@@ -40,10 +40,11 @@ class UserPreferences(private val context: Context) {
             .remove(KEY_ID_LEGACY)
             .putString(KEY_PROVIDER, provider)
             .putString(KEY_NAME, name)
-            .putString(KEY_NICKNAME, nickname)
+            // .putString(KEY_NICKNAME, nickname) // ❌ 不再存暱稱
             .putString(KEY_AVATAR, avatarUrl)
             .apply()
     }
+
 
     /**
      * ✅ 取得使用者資料（非同步）
@@ -74,13 +75,13 @@ class UserPreferences(private val context: Context) {
 
         val provider = prefs.getString(KEY_PROVIDER, null) ?: return null
         val name = prefs.getString(KEY_NAME, "") ?: ""
-        val nickname = prefs.getString(KEY_NICKNAME, "") ?: ""
+        //val nickname = prefs.getString(KEY_NICKNAME, "") ?: ""
         val avatar = prefs.getString(KEY_AVATAR, "") ?: ""
         return UserData(
             id = id,
             provider = provider,
             name = name,
-            nickname = nickname,
+            nickname = "",
             avatarUrl = avatar
         )
     }

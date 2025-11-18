@@ -22,6 +22,8 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 import java.util.*
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.launch
 
 private const val PREFS = "profile_prefs"
 private const val KEY_NICK = "nickname"
@@ -51,21 +53,82 @@ class ProfileViewModel(
     // 🧠 載入使用者資料（帳號、暱稱、頭貼、自我介紹）
     fun load(ctx: Context) {
         _username.value = auth.currentUser(ctx) ?: "訪客"
-
-        val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        _nickname.value = prefs.getString(KEY_NICK, "暱稱") ?: "暱稱"
-
-        val avatarStr = prefs.getString(KEY_AVATAR, null)
-        _avatarUri.value = if (avatarStr != null) Uri.parse(avatarStr) else null
-
-        _intro.value = prefs.getString(KEY_INTRO, "") ?: ""
+        viewModelScope.launch {
+            loadProfileFromServer(ctx)
+        }
     }
+    private suspend fun loadProfileFromServer(ctx: Context) {
+        withContext(Dispatchers.IO) {
+            try {
+                val userPrefs = UserPreferences(ctx)
+                val user = userPrefs.getUser() ?: run {
+                    Log.e("Profile", "loadProfileFromServer: user is null")
+                    return@withContext
+                }
 
-    // 💾 儲存暱稱（本機）
-    fun saveNickname(ctx: Context, nickname: String) {
-        val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        prefs.edit().putString(KEY_NICK, nickname).apply()
-        _nickname.value = nickname
+                val userId = user.id
+                val provider = user.provider
+
+                // 假設有一支 API：get_profile.php?user_id=&provider=
+                val query = "user_id=${URLEncoder.encode(userId.toString(), "UTF-8")}" +
+                        "&provider=${URLEncoder.encode(provider, "UTF-8")}"
+
+                val url = URL("http://59.127.30.235:85/api/update_profile.php?$query")
+                val conn = (url.openConnection() as HttpURLConnection).apply {
+                    requestMethod = "GET"
+                    connectTimeout = 8000
+                    readTimeout = 8000
+                }
+
+                val code = conn.responseCode
+                val responseText = if (code in 200..299) {
+                    conn.inputStream.bufferedReader().use { it.readText() }
+                } else {
+                    conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+                }
+                conn.disconnect()
+
+                Log.d("Profile", "get_profile response($code): $responseText")
+
+                val json = try {
+                    JSONObject(responseText)
+                } catch (e: Exception) {
+                    Log.e("Profile", "解析 profile JSON 失敗", e)
+                    null
+                } ?: return@withContext
+
+                val success = json.optBoolean("success", false)
+                if (!success) {
+                    Log.e("Profile", "get_profile 後端回傳失敗: ${json.optString("message")}")
+                    return@withContext
+                }
+
+                // 假設資料在 data 裡
+                val data = json.optJSONObject("data") ?: json
+                val nicknameFromServer = data.optString("nickname", "暱稱")
+                val avatarUrlFromServer = data.optString("avatar_url", "")
+                val introFromServer = data.optString("intro", "")
+
+                // 回到主執行緒更新 UI state
+                withContext(Dispatchers.Main) {
+                    _nickname.value = nicknameFromServer
+                    _intro.value = introFromServer
+
+                    _avatarUri.value = avatarUrlFromServer
+                        .takeIf { it.isNotBlank() }
+                        ?.let { Uri.parse(it) }
+                }
+
+            } catch (e: Exception) {
+                Log.e("Profile", "loadProfileFromServer 失敗", e)
+            }
+        }
+    }
+//    fun saveNicknameInMemory(nickname: String) {
+//        _nickname.value = nickname
+//    }
+    fun updateNicknameInMemory(newNickname: String) {
+        _nickname.value = newNickname
     }
 
     // 💾 儲存相簿選擇的頭貼 URI（本機）

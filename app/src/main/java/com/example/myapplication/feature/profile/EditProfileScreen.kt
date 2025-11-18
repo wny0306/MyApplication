@@ -43,7 +43,7 @@ import java.net.URL
 @Composable
 fun EditProfileScreen(
     navController: NavController,
-    viewModel: ProfileViewModel = viewModel()
+    viewModel: ProfileViewModel
 ) {
     val context = LocalContext.current
     val prefs = remember { UserPreferences(context) }
@@ -171,14 +171,9 @@ fun EditProfileScreen(
                             val ok = runCatching { JSONObject(response).optBoolean("success", true) }.getOrDefault(true)
 
                             if (ok) {
-                                // 本地也更新暱稱與頭像
-                                prefs.saveUser(
-                                    id = userId,
-                                    provider = provider,
-                                    name = user.name, // 不改名
-                                    nickname = tempNickname,
-                                    avatarUrl = avatarUrl
-                                )
+                                // ✅ 只更新畫面上的暱稱（in-memory）
+                                viewModel.updateNicknameInMemory(tempNickname)
+
                                 CoroutineScope(Dispatchers.Main).launch {
                                     Toast.makeText(context, "更新成功！", Toast.LENGTH_SHORT).show()
                                     navController.navigate("profile") {
