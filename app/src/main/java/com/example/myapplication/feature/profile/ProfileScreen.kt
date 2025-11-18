@@ -81,7 +81,11 @@ fun ProfileScreen(
             TopAppBar(
                 title = { Text("個人資料", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    IconButton(onClick = {
+                        navController.navigate("home") {
+                            popUpTo("home") { inclusive = false }
+                        }
+                    }) {
                         Icon(
                             Icons.Default.ArrowBack,
                             contentDescription = "返回",
