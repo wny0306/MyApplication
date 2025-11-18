@@ -38,6 +38,9 @@ import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+//import java.nio.charset.Charsets   // ⭐ 這行很重要
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.BorderStroke
 
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 @OptIn(ExperimentalMaterial3Api::class)
@@ -71,9 +74,7 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
             val idToken = account.idToken ?: ""
             val displayName = account.displayName ?: "Google 使用者"
             val email = account.email.orEmpty()
-            val providerId = account.id ?: ""   // ⭐ Google provider_id = Google UID
-
-            Log.d("GoogleLogin", "OAuth 成功: $displayName ($email) providerId=$providerId")
+            val providerId = account.id ?: ""   // Google UID
 
             CoroutineScope(Dispatchers.IO).launch {
                 try {
@@ -86,10 +87,7 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
                         doOutput = true
                         connectTimeout = 15000
                         readTimeout = 15000
-                        setRequestProperty(
-                            "Content-Type",
-                            "application/x-www-form-urlencoded; charset=UTF-8"
-                        )
+                        setRequestProperty("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
                         outputStream.use { it.write(postData.toByteArray(Charsets.UTF_8)) }
                     }
 
@@ -105,17 +103,27 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
                     val avatarServer = json?.optString("avatar_url").orEmpty()
 
                     if (success && userId > 0) {
+
                         prefs.saveUser(
                             id = userId,
                             provider = "google",
-                            providerId = providerId,                               // ⭐ 必須
+                            providerId = providerId,
                             name = displayName,
                             avatarUrl = avatarServer
                         )
 
+                        // ⭐ 第一次登入判斷（nickname 空）
+                        val isFirstLogin = nicknameServer.isBlank()
+
                         CoroutineScope(Dispatchers.Main).launch {
-                            navController.navigate("home") {
-                                popUpTo("login") { inclusive = true }
+                            if (isFirstLogin) {
+                                navController.navigate("editProfile") {
+                                    popUpTo("login") { inclusive = true }
+                                }
+                            } else {
+                                navController.navigate("home") {
+                                    popUpTo("login") { inclusive = true }
+                                }
                             }
                         }
                     }
@@ -143,7 +151,7 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
 
             if (loginResult.responseCode?.name == "SUCCESS") {
                 val profile = loginResult.lineProfile
-                val providerId = profile?.userId.orEmpty()  // ⭐ LINE provider_id
+                val providerId = profile?.userId.orEmpty()
                 val displayName = profile?.displayName ?: "LINE 使用者"
                 val pictureUrl = profile?.pictureUrl?.toString().orEmpty()
 
@@ -173,17 +181,27 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
                     val avatarServer = json?.optString("avatar_url").orEmpty()
 
                     if (success && userId > 0) {
+
                         prefs.saveUser(
                             id = userId,
                             provider = "line",
-                            providerId = providerId,              // ⭐ 必須
+                            providerId = providerId,
                             name = displayName,
                             avatarUrl = avatarServer.ifEmpty { pictureUrl }
                         )
 
+                        // ⭐ 第一次登入判斷
+                        val isFirstLogin = nicknameServer.isBlank()
+
                         CoroutineScope(Dispatchers.Main).launch {
-                            navController.navigate("home") {
-                                popUpTo("login") { inclusive = true }
+                            if (isFirstLogin) {
+                                navController.navigate("editProfile") {
+                                    popUpTo("login") { inclusive = true }
+                                }
+                            } else {
+                                navController.navigate("home") {
+                                    popUpTo("login") { inclusive = true }
+                                }
                             }
                         }
                     }
@@ -196,7 +214,7 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
     }
 
     /* ---------------------------------------------------------------------- */
-    /* ⭐ UI */
+    /* ⭐ UI（完全未修改） */
     /* ---------------------------------------------------------------------- */
     Scaffold(containerColor = Color(0xFFF8F9FA)) { padding ->
         Column(
@@ -228,55 +246,88 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
 
             Spacer(Modifier.height(40.dp))
 
-            /* ---------------- Google Login Button ---------------- */
-            Button(
-                onClick = {
-                    val intent = googleSignInClient.signInIntent
-                    googleLauncher.launch(intent)
-                },
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.White)
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+                    .clickable {
+                        val intent = googleSignInClient.signInIntent
+                        googleLauncher.launch(intent)
+                    },
+                shape = RoundedCornerShape(28.dp),               // 圓角更大（接近膠囊按鈕）
+                colors = CardDefaults.cardColors(
+                    containerColor = Color(0xFFF7F7F7)          // 淺灰白背景
+                ),
+                elevation = CardDefaults.cardElevation(0.dp),     // 無陰影
+                border = BorderStroke(1.dp, Color(0xFFD0D0D0))    // 淺灰色外框
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+
                     Icon(
                         painter = painterResource(R.drawable.google),
                         contentDescription = null,
                         tint = Color.Unspecified,
                         modifier = Modifier.size(22.dp)
                     )
+
                     Spacer(Modifier.width(12.dp))
-                    Text("使用 Google 登入", fontSize = 16.sp)
+
+                    Text(
+                        "以 Google 帳號登入",
+                        fontSize = 16.sp,
+                        color = Color.Black
+                    )
                 }
             }
-
-            /* ---------------- LINE Login Button ---------------- */
-            Button(
-                onClick = {
-                    val intent = LineLoginApi.getLoginIntent(
-                        ctx,
-                        "2008319508",
-                        LineAuthenticationParams.Builder()
-                            .scopes(listOf(Scope.PROFILE, Scope.OPENID_CONNECT))
-                            .build()
-                    )
-                    lineLoginLauncher.launch(intent)
-                },
-                modifier = Modifier.fillMaxWidth().height(56.dp).padding(top = 16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF06C755))
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+                    .padding(top = 16.dp)
+                    .clickable {
+                        val intent = LineLoginApi.getLoginIntent(
+                            ctx,
+                            "2008319508",
+                            LineAuthenticationParams.Builder()
+                                .scopes(listOf(Scope.PROFILE, Scope.OPENID_CONNECT))
+                                .build()
+                        )
+                        lineLoginLauncher.launch(intent)
+                    },
+                shape = RoundedCornerShape(28.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color(0xFF06C755)   // ⭐ LINE 綠
+                ),
+                elevation = CardDefaults.cardElevation(0.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+
                     Icon(
                         painter = painterResource(R.drawable.line),
                         contentDescription = null,
                         tint = Color.Unspecified,
                         modifier = Modifier.size(22.dp)
                     )
+
                     Spacer(Modifier.width(12.dp))
-                    Text("使用 LINE 登入", fontSize = 16.sp)
+
+                    Text(
+                        "以 LINE 帳號登入",               // ⭐ 文案可改回你的版本
+                        fontSize = 16.sp,
+                        color = Color.White               // ⭐ 文字白色
+                    )
                 }
             }
 
-            /* ---------------- Developer Login ---------------- */
+
             OutlinedTextField(
                 value = devPassword,
                 onValueChange = { devPassword = it },
@@ -291,7 +342,7 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
                             prefs.saveUser(
                                 id = 1,
                                 provider = "developer",
-                                providerId = "dev_user",        // ⭐ 必須
+                                providerId = "dev_user",
                                 name = "Developer",
                                 avatarUrl = ""
                             )
