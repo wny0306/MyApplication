@@ -247,12 +247,14 @@ class RoomRepositoryImpl(
                 put("room_id", roomId)
                 put("user_id", userId)
             }
-            val res: HttpResponse = client.post("$baseUrl/is_join.php") { // <-- 檔名修正
+            // ⬇⬇ 這邊要改成 is_joined.php
+            val res: HttpResponse = client.post("$baseUrl/is_joined.php") {
                 contentType(ContentType.Application.Json)
-                setBody(payload.toString()) // 純字串 JSON
+                setBody(payload.toString())
             }
             val text = res.bodyAsText()
-            Log.d("RoomRepo", "is_join.php -> $text")
+            Log.d("RoomRepo", "is_joined.php -> $text")
+
             val json = Json.parseToJsonElement(text).jsonObject
             json["success"]?.jsonPrimitive?.booleanOrNull == true &&
                     json["is_joined"]?.jsonPrimitive?.booleanOrNull == true
@@ -261,6 +263,7 @@ class RoomRepositoryImpl(
             false
         }
     }
+
 
     override suspend fun joinRoom(roomId: Int, userId: Int): Boolean = withContext(Dispatchers.IO) {
         try {
