@@ -52,6 +52,9 @@ fun HomeScreen(navController: NavController, vm: RoomListViewModel) {
     val pullToRefreshState = rememberPullToRefreshState()
     var isRefreshing by remember { mutableStateOf(false) }
 
+    // Snackbar 用來顯示錯誤 / 提示訊息
+    val snackbarHostState = remember { SnackbarHostState() }
+
     Scaffold(
         containerColor = Color(0xFFF5F5F5),
         topBar = {
@@ -82,12 +85,33 @@ fun HomeScreen(navController: NavController, vm: RoomListViewModel) {
         bottomBar = {
             BottomAppBar(containerColor = Color(0xFFBDBDBD), contentColor = Color(0xFF424242)) {
                 Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.SpaceAround
                 ) {
-                    IconButton(onClick = { /* TODO: 跳轉已加入房間 */ }) {
-                        Icon(Icons.Default.DoorFront, contentDescription = "跳轉所在的房間", Modifier.size(48.dp))
+                    // 🔽 這顆是「跳轉到自己所在房間」的按鈕
+                    IconButton(
+                        onClick = {
+                            scope.launch {
+                                // 在 ViewModel 中實作 suspend fun getMyCurrentRoomId(): String?
+                                val roomId = vm.getMyCurrentRoomId()
+
+                                if (roomId != null) {
+                                    navController.navigate(Routes.RoomDetail.create(roomId))
+                                } else {
+                                    snackbarHostState.showSnackbar("你目前沒有加入任何房間")
+                                }
+                            }
+                        }
+                    ) {
+                        Icon(
+                            Icons.Default.DoorFront,
+                            contentDescription = "跳轉所在的房間",
+                            Modifier.size(48.dp)
+                        )
                     }
+
                     IconButton(onClick = { navController.navigate(Routes.CreateRoom.path) }) {
                         Icon(Icons.Default.Add, null, Modifier.size(48.dp))
                     }
@@ -96,6 +120,9 @@ fun HomeScreen(navController: NavController, vm: RoomListViewModel) {
                     }
                 }
             }
+        },
+        snackbarHost = {
+            SnackbarHost(hostState = snackbarHostState)
         }
     ) { padding ->
         PullToRefreshBox(
@@ -109,13 +136,21 @@ fun HomeScreen(navController: NavController, vm: RoomListViewModel) {
                     isRefreshing = false
                 }
             },
-            modifier = Modifier.fillMaxSize().padding(padding)
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
         ) {
             LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp)
             ) {
                 items(roomList, key = { it.id }) { room ->
-                    RoomCard(room = room, navController = navController, grayDark = Color(0xFF424242))
+                    RoomCard(
+                        room = room,
+                        navController = navController,
+                        grayDark = Color(0xFF424242)
+                    )
                 }
             }
         }
@@ -130,18 +165,22 @@ fun HomeScreen(navController: NavController, vm: RoomListViewModel) {
                 "高雄市", "屏東縣", "宜蘭縣", "花蓮縣", "台東縣", "澎湖縣", "金門縣", "連江縣"
             ),
             selectedCity = selectedCity,
-            onConfirm = { city -> selectedCity = city; showCityPicker = false },
+            onConfirm = { city ->
+                selectedCity = city
+                showCityPicker = false
+            },
             onDismiss = { showCityPicker = false }
         )
     }
 
-    // 分類 Dialog（這裡改為 Dialog 版）
+    // 分類 Dialog
     RoomFiltersDialog(
         visible = showFilters,
         initial = currentFilters,
         onApply = { vm.applyFilters(it) },
         onDismiss = { showFilters = false },
-        roundsOptions = remember(roomList) { roomList.map { it.rounds }.distinct().sorted() }.ifEmpty { listOf(8,16,32) }
+        roundsOptions = remember(roomList) { roomList.map { it.rounds }.distinct().sorted() }
+            .ifEmpty { listOf(8, 16, 32) }
     )
 }
 
@@ -183,16 +222,24 @@ fun CityPickerDialog(
                                 wrapSelectorWheel = false
                                 setOnValueChangedListener { _, _, newVal -> currentIndex = newVal }
                                 textSize = 40f
-                                descendantFocusability = NumberPicker.FOCUS_BLOCK_DESCENDANTS
+                                descendantFocusability =
+                                    NumberPicker.FOCUS_BLOCK_DESCENDANTS
                             }
                         },
-                        modifier = Modifier.fillMaxWidth().height(150.dp)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(150.dp)
                     )
                 }
                 Spacer(Modifier.height(20.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
                     Button(onClick = onDismiss) { Text("取消", color = Color.White) }
-                    Button(onClick = { onConfirm(cityList[currentIndex]) }) { Text("確定", color = Color.White) }
+                    Button(onClick = { onConfirm(cityList[currentIndex]) }) {
+                        Text("確定", color = Color.White)
+                    }
                 }
             }
         },
@@ -221,11 +268,15 @@ fun RoomCard(
         ) {
             Icon(
                 Icons.Default.Person, null,
-                Modifier.size(48.dp).padding(end = 16.dp),
+                Modifier
+                    .size(48.dp)
+                    .padding(end = 16.dp),
                 tint = grayDark
             )
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -238,11 +289,22 @@ fun RoomCard(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.widthIn(max = 180.dp)
                     )
-                    Text(text = "${room.date.ifEmpty { "未設定" }} ${room.time.ifEmpty { "" }}", fontSize = 18.sp)
-                    Text(text = "目前 ${room.memberCount}/${room.people} 人", fontSize = 16.sp, color = Color.DarkGray)
+                    Text(
+                        text = "${room.date.ifEmpty { "未設定" }} ${room.time.ifEmpty { "" }}",
+                        fontSize = 18.sp
+                    )
+                    Text(
+                        text = "目前 ${room.memberCount}/${room.people} 人",
+                        fontSize = 16.sp,
+                        color = Color.DarkGray
+                    )
                 }
                 Column(horizontalAlignment = Alignment.End) {
-                    Text(text = "${room.basePoint}/${room.taiPoint}", fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = "${room.basePoint}/${room.taiPoint}",
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                     Text(text = "${room.rounds}將", fontSize = 22.sp)
                 }
             }

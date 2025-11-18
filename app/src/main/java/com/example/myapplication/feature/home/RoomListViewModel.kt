@@ -1,6 +1,5 @@
 package com.example.myapplication.feature.home
 
-
 import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
@@ -12,27 +11,22 @@ import com.example.myapplication.domain.model.Member
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
-
 class RoomListViewModel(
     context: Context,
     private val repo: RoomRepository = RoomRepositoryImpl(context)
 ) : ViewModel() {
 
-
     // 🔹 城市選擇
     private val selectedCity = MutableStateFlow("全台")
-
 
     // 🔹 分類篩選狀態
     private val _filters = MutableStateFlow(Filters())
     val filters: StateFlow<Filters> = _filters.asStateFlow()
     fun applyFilters(newFilters: Filters) { _filters.value = newFilters }
 
-
     // 🔹 所有房間資料（從後端抓）
     private val _allRooms = MutableStateFlow<List<MahjongRoom>>(emptyList())
     val allRooms: StateFlow<List<MahjongRoom>> = _allRooms
-
 
     // 🔹 篩選後的房間列表（城市 × 分類）
     val rooms: StateFlow<List<MahjongRoom>> =
@@ -41,12 +35,9 @@ class RoomListViewModel(
             applyFilters(byCity, f)
         }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-
     init { loadRooms() }
 
-
     fun onCitySelected(city: String) { selectedCity.value = city }
-
 
     // 🔹 從後端載入房間資料
     fun loadRooms() {
@@ -59,9 +50,9 @@ class RoomListViewModel(
             }
         }
     }
+
     suspend fun getRoom(roomId: Int): MahjongRoom? = repo.getRoom(roomId)
     suspend fun getRoomMembers(roomId: Int): List<Member> = repo.getRoomMembers(roomId)
-
 
     suspend fun deleteRoom(roomId: Int): Boolean {
         val ok = repo.deleteRoom(roomId)
@@ -69,17 +60,14 @@ class RoomListViewModel(
         return ok
     }
 
-
     suspend fun leaveRoom(roomId: Int, userId: Int): Boolean {
         val ok = repo.leaveRoom(roomId, userId)
         if (ok) loadRooms()
         return ok
     }
 
-
     suspend fun isJoined(roomId: Int, userId: Int): Boolean = repo.isJoined(roomId, userId)
     suspend fun joinRoom(roomId: Int, userId: Int): Boolean = repo.joinRoom(roomId, userId)
-
 
     suspend fun createRoom(room: MahjongRoom): Boolean {
         Log.d("CreateRoom", "currentUserId() -> ${repo.currentUserId()}")
@@ -88,7 +76,6 @@ class RoomListViewModel(
         if (ok) loadRooms()
         return ok
     }
-
 
     // 若其他頁沿用可保留
     private val _roomList = MutableStateFlow<List<MahjongRoom>>(emptyList())
@@ -104,5 +91,40 @@ class RoomListViewModel(
             }
         }
     }
+
     fun currentUserId(): Int? = repo.currentUserId()
+
+    // 🔹 依照目前登入使用者，找出他所在的房間（回傳 roomId，找不到就 null）
+    suspend fun getMyCurrentRoomId(): Int? {
+        val userId = currentUserId() ?: return null
+
+        // 確保有最新房間資料（如果你覺得每次都要最新，可以直接改成每次都 call repo.getRooms()）
+        val rooms = if (_allRooms.value.isEmpty()) {
+            try {
+                val result = repo.getRooms()
+                _allRooms.value = result
+                result
+            } catch (e: Exception) {
+                Log.e("RoomListVM", "getMyCurrentRoomId loadRooms error: ${e.message}", e)
+                emptyList()
+            }
+        } else {
+            _allRooms.value
+        }
+
+        for (room in rooms) {
+            // 房主一定在自己的房
+            if (room.ownerId == userId) return room.id
+
+            try {
+                // 用既有的 isJoined API 檢查 user 是否在這個房
+                if (isJoined(room.id, userId)) {
+                    return room.id
+                }
+            } catch (e: Exception) {
+                Log.e("RoomListVM", "getMyCurrentRoomId isJoined error: ${e.message}", e)
+            }
+        }
+        return null
+    }
 }
