@@ -35,12 +35,13 @@ import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.linecorp.linesdk.api.LineApiClientBuilder
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.collectAsState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
     navController: NavController,
-    vm: ProfileViewModel = viewModel()
+    vm: ProfileViewModel
 ) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -49,7 +50,8 @@ fun ProfileScreen(
     // 載入暱稱 / 頭貼 / 自我介紹
     LaunchedEffect(Unit) { vm.load(ctx) }
 
-    val nickname by vm.nickname.collectAsState()
+    val nickname by vm.nickname.collectAsState(initial = "")
+    Text(text = nickname)
     val avatarUri by vm.avatarUri.collectAsState()
     val intro by vm.intro.collectAsState()
 
@@ -162,12 +164,6 @@ fun ProfileScreen(
                         text = "登入方式：${user.provider.uppercase()}",
                         fontSize = 14.sp,
                         color = Color.Gray
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "官方名稱：${user.name.ifEmpty { "未提供" }}",
-                        fontSize = 18.sp,
-                        color = Color.DarkGray
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                 }

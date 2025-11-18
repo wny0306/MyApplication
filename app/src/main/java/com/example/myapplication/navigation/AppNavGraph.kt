@@ -25,6 +25,7 @@ import com.example.myapplication.feature.profile.ProfileScreen
 import com.example.myapplication.feature.profile.MatchHistoryScreen
 import com.example.myapplication.feature.profile.CreateHistoryScreen
 import com.example.myapplication.feature.roomdetail.RoomDetailScreen
+import com.example.myapplication.feature.profile.ProfileViewModel
 
 // 簡單的 ViewModel Factory，注入 Context
 private class RoomListVMFactory(private val context: Context) : ViewModelProvider.Factory {
@@ -34,38 +35,56 @@ private class RoomListVMFactory(private val context: Context) : ViewModelProvide
     }
 }
 
-@SuppressLint("NewApi") // 屏蔽因 @RequiresApi 造成的呼叫警告（LoginScreen/HomeScreen）
+@SuppressLint("NewApi")
 @Composable
 fun AppNavGraph() {
     val navController = rememberNavController()
     val context = LocalContext.current
+
+    // 原本 RoomListViewModel
     val roomListViewModel: RoomListViewModel =
         viewModel(factory = RoomListVMFactory(context))
+
+    // ⭐ 新增這行：共用 ProfileViewModel（非常重要）
+    val profileViewModel: ProfileViewModel = viewModel()
 
     NavHost(
         navController = navController,
         startDestination = "splash"
     ) {
+
         composable("splash") { SplashScreen(navController) }
 
         composable(Routes.Login.path) { LoginScreen(navController) }
         composable(Routes.SignUp.path) { SignUpScreen(navController) }
+
         composable(Routes.Main.path) { MainScreen(navController) }
         composable(Routes.Home.path) { HomeScreen(navController, roomListViewModel) }
-        composable(Routes.CreateRoom.path) { CreateRoomScreen(navController, roomListViewModel) }
-        composable(Routes.Profile.path) { ProfileScreen(navController) }
-        composable(Routes.EditProfile.path) { EditProfileScreen(navController) }
+
+        composable(Routes.CreateRoom.path) {
+            CreateRoomScreen(navController, roomListViewModel)
+        }
+
+        // ⭐ 這兩個畫面共用同一個 ProfileViewModel
+        composable(Routes.Profile.path) {
+            ProfileScreen(navController, vm = profileViewModel)
+        }
+
+        composable(Routes.EditProfile.path) {
+            EditProfileScreen(navController, viewModel = profileViewModel)
+        }
+
         composable("matchHistory") { MatchHistoryScreen(navController) }
         composable("createHistory") { CreateHistoryScreen(navController) }
         composable("about") { AboutScreen(navController) }
 
-        // ✅ RoomDetail 改為 Int 參數
         composable(
-            route = Routes.RoomDetail.route, // "roomDetail/{roomId}"
+            route = Routes.RoomDetail.route,
             arguments = listOf(navArgument("roomId") { type = NavType.IntType })
         ) { backStackEntry ->
-            val roomId: Int? = backStackEntry.arguments?.getInt("roomId")
+            val roomId = backStackEntry.arguments?.getInt("roomId")
             RoomDetailScreen(navController, roomId, roomListViewModel)
         }
     }
 }
+
