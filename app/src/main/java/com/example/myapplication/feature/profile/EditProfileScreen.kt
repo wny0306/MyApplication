@@ -26,7 +26,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import coil.compose.rememberAsyncImagePainter
 import com.example.myapplication.data.datasource.local.UserPreferences
@@ -34,8 +33,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.json.JSONObject
-import java.io.BufferedReader
-import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -54,22 +51,24 @@ fun EditProfileScreen(
     var tempNickname by remember { mutableStateOf("") }
     var showDialog by remember { mutableStateOf(false) }
 
-    // 進入畫面載入一次
+    /* 自動載入 Profile */
     LaunchedEffect(Unit) { viewModel.load(context) }
 
-    // 將 vm 的暱稱帶到輸入框
+    /* 將暱稱填入輸入框 */
     LaunchedEffect(nickname) {
-        if (nickname.isNotBlank() && nickname != "暱稱") tempNickname = nickname
+        if (nickname.isNotBlank() && nickname != "暱稱") {
+            tempNickname = nickname
+        }
     }
 
-    // 相簿
+    /* 相簿 */
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
         uri?.let { viewModel.saveAvatarUri(context, it) }
     }
 
-    // 拍照
+    /* 拍照 */
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicturePreview()
     ) { bitmap ->
@@ -88,6 +87,7 @@ fun EditProfileScreen(
             )
         }
     ) { padding ->
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -95,7 +95,8 @@ fun EditProfileScreen(
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // 頭像
+
+            /* 頭貼 */
             Box(
                 modifier = Modifier
                     .size(120.dp)
@@ -126,7 +127,7 @@ fun EditProfileScreen(
 
             Spacer(Modifier.height(32.dp))
 
-            // 暱稱
+            /* 暱稱輸入框 */
             OutlinedTextField(
                 value = tempNickname,
                 onValueChange = { tempNickname = it },
@@ -136,7 +137,7 @@ fun EditProfileScreen(
 
             Spacer(Modifier.height(32.dp))
 
-            // 儲存
+            /* 儲存按鈕 */
             Button(
                 onClick = {
                     CoroutineScope(Dispatchers.IO).launch {
@@ -147,15 +148,18 @@ fun EditProfileScreen(
                             return@launch
                         }
 
-                        val userId = user.id                // Int
-                        val provider = user.provider        // String
+                        val userId = user.id
+                        val provider = user.provider
+                        val providerId = user.providerId   // ⭐ 必須讀取的欄位
                         val avatarUrl = avatarUri?.toString() ?: ""
 
                         try {
                             val url = URL("http://59.127.30.235:85/api/update_profile.php")
+
                             val postData =
-                                "user_id=${Uri.encode(userId.toString())}" + // ✅ Int 轉字串再 encode
+                                "user_id=${Uri.encode(userId.toString())}" +
                                         "&provider=${Uri.encode(provider)}" +
+                                        "&provider_id=${Uri.encode(providerId)}" +  // ⭐ 必須加入
                                         "&nickname=${Uri.encode(tempNickname)}" +
                                         "&avatar_url=${Uri.encode(avatarUrl)}"
 
@@ -165,17 +169,16 @@ fun EditProfileScreen(
                                 outputStream.use { it.write(postData.toByteArray()) }
                             }
 
-                            val response = BufferedReader(InputStreamReader(conn.inputStream)).use { it.readText() }
-
-                            // 解析可選：若後端回 {"success":true}
-                            val ok = runCatching { JSONObject(response).optBoolean("success", true) }.getOrDefault(true)
+                            val response = conn.inputStream.bufferedReader().readText()
+                            val ok = runCatching {
+                                JSONObject(response).optBoolean("success", true)
+                            }.getOrDefault(true)
 
                             if (ok) {
-                                // ✅ 只更新畫面上的暱稱（in-memory）
                                 viewModel.updateNicknameInMemory(tempNickname)
 
                                 CoroutineScope(Dispatchers.Main).launch {
-                                    Toast.makeText(context, "更新成功！", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "更新成功", Toast.LENGTH_SHORT).show()
                                     navController.navigate("profile") {
                                         popUpTo("editProfile") { inclusive = true }
                                     }
@@ -185,16 +188,15 @@ fun EditProfileScreen(
                                     Toast.makeText(context, "更新失敗", Toast.LENGTH_SHORT).show()
                                 }
                             }
+
                         } catch (e: Exception) {
                             CoroutineScope(Dispatchers.Main).launch {
-                                Toast.makeText(context, "更新失敗: ${e.message}", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "更新錯誤：${e.message}", Toast.LENGTH_SHORT).show()
                             }
                         }
                     }
                 },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp),
+                modifier = Modifier.fillMaxWidth().height(50.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(0xFF3F51B5),
                     contentColor = Color.White
@@ -206,7 +208,7 @@ fun EditProfileScreen(
         }
     }
 
-    // 選擇頭貼來源 Dialog
+    /* 選擇頭貼來源 Dialog */
     if (showDialog) {
         AlertDialog(
             onDismissRequest = { showDialog = false },
@@ -214,14 +216,14 @@ fun EditProfileScreen(
             text = {
                 Column {
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
                                 showDialog = false
                                 cameraLauncher.launch(null)
                             }
-                            .padding(vertical = 12.dp)
+                            .padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(Icons.Default.CameraAlt, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
@@ -229,14 +231,14 @@ fun EditProfileScreen(
                     }
 
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
                                 showDialog = false
                                 galleryLauncher.launch("image/*")
                             }
-                            .padding(vertical = 12.dp)
+                            .padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(Icons.Outlined.Photo, contentDescription = null)
                         Spacer(Modifier.width(8.dp))

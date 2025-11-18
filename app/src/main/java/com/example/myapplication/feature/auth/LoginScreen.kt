@@ -36,8 +36,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.json.JSONObject
-import java.io.BufferedReader
-import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -47,29 +45,35 @@ import java.net.URL
 fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
     val ctx = LocalContext.current
     val prefs = remember { UserPreferences(ctx) }
+
     var devPassword by remember { mutableStateOf("") }
     val developerPass = "1"
+
     val gso = remember {
         GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestIdToken("213521066881-nttt15ipnd5mg500oeu0an81bq7ejthf.apps.googleusercontent.c")
+            .requestIdToken("213521066881-nttt15ipnd5mg500oeu0an81bq7ejthf.apps.googleusercontent.com")
             .requestEmail()
             .build()
     }
+
     val googleSignInClient = remember { GoogleSignIn.getClient(ctx, gso) }
 
-
-    // -------------- Google Sign-In 回呼 --------------
+    /* ---------------------------------------------------------------------- */
+    /* ⭐ Google Login */
+    /* ---------------------------------------------------------------------- */
     val googleLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
         val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+
         try {
             val account = task.getResult(ApiException::class.java)
             val idToken = account.idToken ?: ""
             val displayName = account.displayName ?: "Google 使用者"
             val email = account.email.orEmpty()
+            val providerId = account.id ?: ""   // ⭐ Google provider_id = Google UID
 
-            Log.d("GoogleLogin", "✅ OAuth 成功: $displayName ($email)")
+            Log.d("GoogleLogin", "OAuth 成功: $displayName ($email) providerId=$providerId")
 
             CoroutineScope(Dispatchers.IO).launch {
                 try {
@@ -90,121 +94,110 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
                     }
 
                     val code = conn.responseCode
-                    val body = try {
-                        (if (code in 200..299) conn.inputStream else conn.errorStream)
-                            ?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
-                    } finally { conn.disconnect() }
-
-                    Log.d("Google_DB", "HTTP $code body=$body")
+                    val body = (if (code in 200..299) conn.inputStream else conn.errorStream)
+                        ?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
+                    conn.disconnect()
 
                     val json = runCatching { JSONObject(body) }.getOrNull()
                     val success = json?.optBoolean("success") == true
                     val userId = json?.optInt("user_id", -1) ?: -1
-                    val nameFromServer = json?.optString("name").orEmpty()
-                    val avatarFromServer = json?.optString("avatar_url").orEmpty()
+                    val nicknameServer = json?.optString("nickname").orEmpty()
+                    val avatarServer = json?.optString("avatar_url").orEmpty()
 
-                    if (code in 200..299 && success && userId > 0) {
+                    if (success && userId > 0) {
                         prefs.saveUser(
                             id = userId,
                             provider = "google",
-                            name = nameFromServer.ifEmpty { displayName },
-                            nickname = nameFromServer.ifEmpty { displayName },
-                            avatarUrl = avatarFromServer
+                            providerId = providerId,                               // ⭐ 必須
+                            name = displayName,
+                            avatarUrl = avatarServer
                         )
+
                         CoroutineScope(Dispatchers.Main).launch {
                             navController.navigate("home") {
                                 popUpTo("login") { inclusive = true }
                             }
                         }
-                    } else {
-                        Log.e("Google_DB", "❌ 後端失敗或 user_id 無效 (code=$code)")
                     }
+
                 } catch (e: Exception) {
-                    Log.e("Google_DB", "❌ 例外: ${e.message}")
+                    Log.e("GoogleLogin", "Exception: ${e.message}")
                 }
             }
+
         } catch (e: ApiException) {
-            Log.e("GoogleLogin", "❌ OAuth 失敗: ${e.statusCode}")
+            Log.e("GoogleLogin", "OAuth Failed: ${e.statusCode}")
         }
     }
 
-    // -------------- LINE Login 回呼 --------------
+    /* ---------------------------------------------------------------------- */
+    /* ⭐ LINE Login */
+    /* ---------------------------------------------------------------------- */
     val lineLoginLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
+
         try {
             val intentData = result.data ?: return@rememberLauncherForActivityResult
             val loginResult = LineLoginApi.getLoginResultFromIntent(intentData)
-            when (loginResult.responseCode?.name) {
-                "SUCCESS" -> {
-                    val profile = loginResult.lineProfile
-                    val lineUid = profile?.userId.orEmpty()          // provider_id
-                    val displayName = profile?.displayName ?: "LINE 使用者"
-                    val pictureUrl = profile?.pictureUrl?.toString().orEmpty()
 
-                    Log.d("LINE_LOGIN", "✅ OAuth 成功: $displayName ($lineUid)")
+            if (loginResult.responseCode?.name == "SUCCESS") {
+                val profile = loginResult.lineProfile
+                val providerId = profile?.userId.orEmpty()  // ⭐ LINE provider_id
+                val displayName = profile?.displayName ?: "LINE 使用者"
+                val pictureUrl = profile?.pictureUrl?.toString().orEmpty()
 
-                    CoroutineScope(Dispatchers.IO).launch {
-                        try {
-                            val url = URL("http://59.127.30.235:85/api/api_line_login.php")
-                            val postData =
-                                "userId=${Uri.encode(lineUid)}&displayName=${Uri.encode(displayName)}&pictureUrl=${Uri.encode(pictureUrl)}"
+                CoroutineScope(Dispatchers.IO).launch {
+                    val url = URL("http://59.127.30.235:85/api/api_line_login.php")
 
-                            val conn = (url.openConnection() as HttpURLConnection).apply {
-                                requestMethod = "POST"
-                                doOutput = true
-                                connectTimeout = 15000
-                                readTimeout = 15000
-                                setRequestProperty(
-                                    "Content-Type",
-                                    "application/x-www-form-urlencoded; charset=UTF-8"
-                                )
-                                outputStream.use { it.write(postData.toByteArray(Charsets.UTF_8)) }
+                    val postData =
+                        "userId=${Uri.encode(providerId)}" +
+                                "&displayName=${Uri.encode(displayName)}" +
+                                "&pictureUrl=${Uri.encode(pictureUrl)}"
+
+                    val conn = (url.openConnection() as HttpURLConnection).apply {
+                        requestMethod = "POST"
+                        doOutput = true
+                        outputStream.use { it.write(postData.toByteArray()) }
+                    }
+
+                    val code = conn.responseCode
+                    val body = (if (code in 200..299) conn.inputStream else conn.errorStream)
+                        ?.bufferedReader()?.use { it.readText() }.orEmpty()
+                    conn.disconnect()
+
+                    val json = runCatching { JSONObject(body) }.getOrNull()
+                    val success = json?.optBoolean("success") == true
+                    val userId = json?.optInt("user_id", -1) ?: -1
+                    val nicknameServer = json?.optString("nickname").orEmpty()
+                    val avatarServer = json?.optString("avatar_url").orEmpty()
+
+                    if (success && userId > 0) {
+                        prefs.saveUser(
+                            id = userId,
+                            provider = "line",
+                            providerId = providerId,              // ⭐ 必須
+                            name = displayName,
+                            avatarUrl = avatarServer.ifEmpty { pictureUrl }
+                        )
+
+                        CoroutineScope(Dispatchers.Main).launch {
+                            navController.navigate("home") {
+                                popUpTo("login") { inclusive = true }
                             }
-
-                            val code = conn.responseCode
-                            val body = try {
-                                (if (code in 200..299) conn.inputStream else conn.errorStream)
-                                    ?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
-                            } finally { conn.disconnect() }
-
-                            Log.d("LINE_DB", "HTTP $code body=$body")
-
-                            val json = runCatching { JSONObject(body) }.getOrNull()
-                            val success = json?.optBoolean("success") == true
-                            val userId = json?.optInt("user_id", -1) ?: -1   // 回全域 users.id
-                            val nameFromServer = json?.optString("name").orEmpty()
-                            val avatarFromServer = json?.optString("avatar_url").orEmpty()
-
-                            if (code in 200..299 && success && userId > 0) {
-                                prefs.saveUser(
-                                    id = userId,                         // ✅ Int（全域）
-                                    provider = "line",
-                                    name = nameFromServer.ifEmpty { displayName },
-                                    nickname = nameFromServer.ifEmpty { displayName },
-                                    avatarUrl = avatarFromServer.ifEmpty { pictureUrl }
-                                )
-                                CoroutineScope(Dispatchers.Main).launch {
-                                    navController.navigate("home") {
-                                        popUpTo("login") { inclusive = true }
-                                    }
-                                }
-                            } else {
-                                Log.e("LINE_DB", "❌ 後端失敗或 user_id 無效 (code=$code)")
-                            }
-                        } catch (e: Exception) {
-                            Log.e("LINE_DB", "❌ 例外: ${e.message}")
                         }
                     }
                 }
-                else -> Log.e("LINE_LOGIN", "❌ OAuth 失敗: ${loginResult.errorData.message}")
             }
+
         } catch (e: Exception) {
-            Log.e("LINE_LOGIN", "❌ 例外：${e.stackTraceToString()}")
+            Log.e("LINE_LOGIN", "Exception: ${e.message}")
         }
     }
 
-    // ---------- UI ----------
+    /* ---------------------------------------------------------------------- */
+    /* ⭐ UI */
+    /* ---------------------------------------------------------------------- */
     Scaffold(containerColor = Color(0xFFF8F9FA)) { padding ->
         Column(
             Modifier
@@ -215,57 +208,48 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
+
             Image(
                 painter = painterResource(id = R.drawable.shimilogo),
-                contentDescription = "App Logo",
-                modifier = Modifier
-                    .height(140.dp)
-                    .width(140.dp)
-                    .padding(bottom = 16.dp),
+                contentDescription = "Logo",
+                modifier = Modifier.size(140.dp),
                 contentScale = ContentScale.Fit
             )
 
+            Spacer(Modifier.height(20.dp))
+
             Text(
-                text = "Link UP",
+                "Link UP",
                 fontSize = 42.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF2E2E2E),
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(bottom = 40.dp)
+                textAlign = TextAlign.Center
             )
 
-            val buttonHeight = 56.dp
-            val buttonShape = RoundedCornerShape(14.dp)
+            Spacer(Modifier.height(40.dp))
 
-            // Google 登入
+            /* ---------------- Google Login Button ---------------- */
             Button(
                 onClick = {
                     val intent = googleSignInClient.signInIntent
                     googleLauncher.launch(intent)
                 },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(buttonHeight)
-                    .shadow(3.dp, buttonShape),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color.White,
-                    contentColor = Color.Black
-                ),
-                shape = buttonShape
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color.White)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        painter = painterResource(id = R.drawable.google),
+                        painter = painterResource(R.drawable.google),
                         contentDescription = null,
                         tint = Color.Unspecified,
                         modifier = Modifier.size(22.dp)
                     )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text("使用 Google 登入", fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                    Spacer(Modifier.width(12.dp))
+                    Text("使用 Google 登入", fontSize = 16.sp)
                 }
             }
 
-            // LINE 登入
+            /* ---------------- LINE Login Button ---------------- */
             Button(
                 onClick = {
                     val intent = LineLoginApi.getLoginIntent(
@@ -277,70 +261,49 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
                     )
                     lineLoginLauncher.launch(intent)
                 },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(buttonHeight)
-                    .padding(top = 16.dp)
-                    .shadow(3.dp, buttonShape),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF06C755),
-                    contentColor = Color.White
-                ),
-                shape = buttonShape
+                modifier = Modifier.fillMaxWidth().height(56.dp).padding(top = 16.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF06C755))
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        painter = painterResource(id = R.drawable.line),
+                        painter = painterResource(R.drawable.line),
                         contentDescription = null,
                         tint = Color.Unspecified,
                         modifier = Modifier.size(22.dp)
                     )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text("使用 LINE 登入", fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                    Spacer(Modifier.width(12.dp))
+                    Text("使用 LINE 登入", fontSize = 16.sp)
                 }
             }
 
-            // 開發者登入（本地預設 Int ID）
+            /* ---------------- Developer Login ---------------- */
             OutlinedTextField(
                 value = devPassword,
                 onValueChange = { devPassword = it },
-                label = { Text("開發者測試密碼") },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 28.dp)
+                label = { Text("開發者密碼") },
+                modifier = Modifier.fillMaxWidth().padding(top = 28.dp)
             )
+
             Button(
                 onClick = {
                     if (devPassword == developerPass) {
                         CoroutineScope(Dispatchers.IO).launch {
                             prefs.saveUser(
-                                id = 1,                    // ✅ Int
+                                id = 1,
                                 provider = "developer",
+                                providerId = "dev_user",        // ⭐ 必須
                                 name = "Developer",
-                                nickname = "Developer",
                                 avatarUrl = ""
                             )
-                            Log.d("AutoLogin", "✅ 開發者模式登入成功")
                         }
                         navController.navigate("home") {
                             popUpTo("login") { inclusive = true }
                         }
-                    } else {
-                        Log.e("AutoLogin", "❌ 密碼錯誤")
                     }
                 },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(buttonHeight)
-                    .padding(top = 12.dp)
-                    .shadow(2.dp, buttonShape),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFFE0E0E0),
-                    contentColor = Color(0xFF333333)
-                ),
-                shape = buttonShape
+                modifier = Modifier.fillMaxWidth().height(56.dp).padding(top = 12.dp)
             ) {
-                Text("開發者快速登入", fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                Text("開發者快速登入", fontSize = 16.sp)
             }
         }
     }
