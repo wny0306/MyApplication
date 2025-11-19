@@ -57,6 +57,7 @@ class RoomRepositoryImpl(
                     id = o["id"]?.jsonPrimitive?.intOrNull ?: 0,
                     ownerId = o["owner_id"]?.jsonPrimitive?.intOrNull ?: 0,
                     ownerName = o["owner_name"]?.jsonPrimitive?.content,
+                    avatarUrl = o["avatar_url"]?.jsonPrimitive?.content,
                     people = o["people"]?.jsonPrimitive?.intOrNull ?: 4,
                     flower = (o["flower"]?.jsonPrimitive?.intOrNull ?: 0) == 1,
                     date = o["date"]?.jsonPrimitive?.content ?: "",

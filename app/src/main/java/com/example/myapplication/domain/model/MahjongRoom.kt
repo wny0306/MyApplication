@@ -1,11 +1,10 @@
 package com.example.myapplication.domain.model
 
-import com.example.myapplication.data.remote.dto.RoomDto
-
 data class MahjongRoom(
     val id: Int,
     val ownerId: Int,
     val ownerName: String? = null,
+    val avatarUrl: String? = null,
     val people: Int,
     val flower: Boolean,
     val date: String,
@@ -24,12 +23,38 @@ data class MahjongRoom(
     val memberCount: Int = 0
 )
 
+data class RoomDto(
+    val id: Int,
+    val owner_id: Int,
+    val owner_name: String? = null,
+    val avatar_url: String? = null,
+    val people: Int,
+    val flower: Boolean,
+    val date: String,
+    val time: String,
+    val city: String,
+    val location: String,
+    val rounds: Int,
+    val dice_rule: Boolean,
+    val ligu: Boolean,
+    val base_point: Int,
+    val tai_point: Int,
+    val note: String? = null,
+    val members: List<Member>? = null,
+    val member_count: Int = 0,
+    val created_at: String? = null,
+    val updated_at: String? = null
+)
 
-// ✅ DTO → Domain
+
+// ----------------------
+// DTO → Domain
+// ----------------------
 fun RoomDto.toDomain() = MahjongRoom(
     id = id,
     ownerId = owner_id,
     ownerName = owner_name,
+    avatarUrl = avatar_url,
     people = people,
     flower = flower,
     date = date,
@@ -42,14 +67,21 @@ fun RoomDto.toDomain() = MahjongRoom(
     basePoint = base_point,
     taiPoint = tai_point,
     note = note,
-    members = members ?: emptyList(),
     createdAt = created_at,
-    updatedAt = updated_at
+    updatedAt = updated_at,
+    members = members ?: emptyList(),
+    memberCount = member_count
 )
+
+
+// ----------------------
 // Domain → DTO
+// ----------------------
 fun MahjongRoom.toDto() = RoomDto(
     id = id,
     owner_id = ownerId,
+    owner_name = ownerName,
+    avatar_url = avatarUrl,
     people = people,
     flower = flower,
     date = date,
@@ -62,6 +94,8 @@ fun MahjongRoom.toDto() = RoomDto(
     base_point = basePoint,
     tai_point = taiPoint,
     note = note,
+    members = members,
+    member_count = memberCount,
     created_at = createdAt,
     updated_at = updatedAt
 )
