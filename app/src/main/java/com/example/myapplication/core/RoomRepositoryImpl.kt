@@ -94,18 +94,18 @@ class RoomRepositoryImpl(
             val text = res.bodyAsText()
             Log.d("RoomRepo", "get_room_detail.php -> $text")
 
-            val root = Json.parseToJsonElement(text).jsonObject
-            if (root["success"]?.jsonPrimitive?.booleanOrNull != true) return@withContext null
+            // 現在 PHP 直接回傳「房間物件」，不再包 success/room
+            val o = Json.parseToJsonElement(text).jsonObject
 
-            val o = root["room"]?.jsonObject ?: return@withContext null
-
+            // 解析 members 陣列
             val membersArray = o["members"]?.jsonArray ?: JsonArray(emptyList())
             val members = membersArray.map { m ->
                 val u = m.jsonObject
                 Member(
                     id = u["id"]?.jsonPrimitive?.intOrNull ?: 0,
                     name = u["name"]?.jsonPrimitive?.content ?: "未知玩家",
-                    intro = u["intro"]?.jsonPrimitive?.content ?: ""
+                    intro = u["intro"]?.jsonPrimitive?.content ?: "",
+                    avatarUrl = u["avatarUrl"]?.jsonPrimitive?.content // 可能是 null
                 )
             }
 
@@ -113,6 +113,7 @@ class RoomRepositoryImpl(
                 id = o["id"]?.jsonPrimitive?.intOrNull ?: 0,
                 ownerId = o["owner_id"]?.jsonPrimitive?.intOrNull ?: 0,
                 ownerName = o["owner_name"]?.jsonPrimitive?.content,
+                avatarUrl = o["avatar_url"]?.jsonPrimitive?.content,
                 people = o["people"]?.jsonPrimitive?.intOrNull ?: 4,
                 flower = (o["flower"]?.jsonPrimitive?.intOrNull ?: 0) == 1,
                 date = o["date"]?.jsonPrimitive?.content ?: "",
@@ -127,7 +128,8 @@ class RoomRepositoryImpl(
                 note = o["note"]?.jsonPrimitive?.content,
                 createdAt = o["created_at"]?.jsonPrimitive?.content,
                 updatedAt = o["updated_at"]?.jsonPrimitive?.content,
-                members = members
+                members = members,
+                memberCount = o["member_count"]?.jsonPrimitive?.intOrNull ?: members.size
             )
         } catch (e: Exception) {
             Log.e("RoomRepo", "getRoom error: ${e.message}", e)
@@ -156,7 +158,9 @@ class RoomRepositoryImpl(
                 Member(
                     id = o["id"]?.jsonPrimitive?.intOrNull ?: 0,
                     name = o["name"]?.jsonPrimitive?.content ?: "未知玩家",
-                    intro = o["intro"]?.jsonPrimitive?.content ?: ""
+                    intro = o["intro"]?.jsonPrimitive?.content ?: "",
+                    // 如果之後 get_members.php 也回 avatarUrl，再補這行：
+                    // avatarUrl = o["avatarUrl"]?.jsonPrimitive?.content
                 )
             }
         } catch (e: Exception) {
@@ -248,7 +252,6 @@ class RoomRepositoryImpl(
                 put("room_id", roomId)
                 put("user_id", userId)
             }
-            // ⬇⬇ 這邊要改成 is_joined.php
             val res: HttpResponse = client.post("$baseUrl/is_joined.php") {
                 contentType(ContentType.Application.Json)
                 setBody(payload.toString())
@@ -264,7 +267,6 @@ class RoomRepositoryImpl(
             false
         }
     }
-
 
     override suspend fun joinRoom(roomId: Int, userId: Int): Boolean = withContext(Dispatchers.IO) {
         try {
