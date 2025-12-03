@@ -7,6 +7,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
@@ -20,7 +21,6 @@ import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.outlined.EmojiEvents
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -41,6 +41,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -50,6 +51,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.example.myapplication.R
 import com.example.myapplication.domain.model.MahjongRoom
 import com.example.myapplication.feature.home.RoomListViewModel
@@ -121,7 +124,7 @@ fun RoomDetailScreen(
     val members = safeRoom.members
     val currentUserId = vm.currentUserId()
 
-    // 角色
+    // 角色以目前 detail 直接計算（避免 remember 卡住）
     val role = when {
         currentUserId == safeRoom.ownerId -> RoomViewerRole.Owner
         members.any { it.id == (currentUserId ?: -1) } -> RoomViewerRole.Member
@@ -130,6 +133,10 @@ fun RoomDetailScreen(
 
     // 房間是否已滿（含房主）
     val isFull = members.size >= safeRoom.people
+
+    // 房主 member（用在頭貼 & 自介）
+    val ownerMember = members.firstOrNull { it.id == safeRoom.ownerId }
+    val ownerAvatar = ownerMember?.avatarUrl ?: room.avatarUrl
 
     // ---------- UI ----------
 
@@ -186,7 +193,7 @@ fun RoomDetailScreen(
                                 Icon(
                                     imageVector = Icons.Filled.Add,
                                     contentDescription = if (isFull) "房間已滿" else "加入",
-                                    tint = if (isFull) Color.LightGray else Color(0xFF424242) // 深灰主題色
+                                    tint = if (isFull) Color.LightGray else Color(0xFF2196F3)
                                 )
                             }
                         }
@@ -196,258 +203,238 @@ fun RoomDetailScreen(
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        // 讓下面的背景圖可以露出來
-        containerColor = Color.Transparent
+        containerColor = Color(0xFFF5F5F5)
     ) { padding ->
-
-        // ===== 背景圖 + 內容 =====
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
         ) {
-            // 背景圖片
+            // ---------- 背景圖 ----------
             Image(
-                painter = painterResource(R.drawable.bg_room_detail),
+                painter = painterResource(id = R.drawable.bg_room_detail),
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
-                alpha = 0.25f
+                alpha = 0.25f   // ← 透明度：0.0 ~ 1.0（越小越透明）
             )
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            val buttonColors = Color.DarkGray
+            val cardBg = Color(0xFFE8E8E8)
+            val cardShape = RoundedCornerShape(16.dp)
 
-            // 前景原本內容
-            Column(
+            // 房主卡片（保留原本樣式，只換頭貼）
+            Row(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .fillMaxWidth()
+                    .height(60.dp)
+                    .shadow(2.dp, cardShape)
+                    .background(cardBg, cardShape)
+                    .padding(horizontal = 20.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                val buttonColors = Color.DarkGray
-                val cardBg = Color(0xFFE8E8E8).copy(alpha = 0.9f)
-                val cardShape = RoundedCornerShape(16.dp)
-
-                // 房主卡片
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(60.dp)
-                        .clip(cardShape)
-                        .background(cardBg)
-                        .padding(horizontal = 20.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                if (!ownerAvatar.isNullOrEmpty()) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(context)
+                            .data(ownerAvatar)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = "頭貼",
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(CircleShape),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
                     Icon(
                         imageVector = Icons.Filled.AccountBox,
                         contentDescription = null,
                         tint = buttonColors,
                         modifier = Modifier.size(30.dp)
                     )
-                    Spacer(Modifier.width(24.dp))
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = safeRoom.ownerName ?: "未命名",
-                                color = buttonColors,
-                                fontSize = 22.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Icon(
-                                imageVector = Icons.Outlined.EmojiEvents,
-                                contentDescription = "房主",
-                                tint = Color(0xFFFFD700),
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
-                        val ownerIntro =
-                            members.firstOrNull { it.id == safeRoom.ownerId }?.intro
-                        Text(
-                            text = ownerIntro ?: "這位房主還沒有填寫自我介紹",
-                            color = Color.DarkGray,
-                            fontSize = 14.sp
-                        )
-                    }
                 }
 
-                // 其他成員
-                members
-                    .filter { it.id != safeRoom.ownerId }
-                    .forEach { member ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(60.dp)
-                                .clip(cardShape)
-                                .background(cardBg)
-                                .padding(horizontal = 20.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
+                Spacer(Modifier.width(24.dp))
+                Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = safeRoom.ownerName ?: "未命名",
+                            color = buttonColors,
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Icon(
+                            imageVector = Icons.Outlined.EmojiEvents,
+                            contentDescription = "房主",
+                            tint = Color(0xFFFFD700),
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                    Text(
+                        text = ownerMember?.intro?.ifEmpty { "這位房主還沒有填寫自我介紹" }
+                            ?: "這位房主還沒有填寫自我介紹",
+                        color = Color.DarkGray,
+                        fontSize = 14.sp
+                    )
+                }
+            }
+
+            // 其他成員（保留原本排版，只換頭貼）
+            members
+                .filter { it.id != safeRoom.ownerId }
+                .forEach { member ->
+                    val avatar = member.avatarUrl
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(60.dp)
+                            .background(cardBg, cardShape)
+                            .padding(horizontal = 20.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+
+                        if (!avatar.isNullOrEmpty()) {
+                            AsyncImage(
+                                model = ImageRequest.Builder(context)
+                                    .data(avatar)
+                                    .crossfade(true)
+                                    .build(),
+                                contentDescription = "頭貼",
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clip(CircleShape),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
                             Icon(
                                 imageVector = Icons.Filled.Person,
                                 contentDescription = null,
                                 tint = buttonColors,
                                 modifier = Modifier.size(30.dp)
                             )
-                            Spacer(Modifier.width(24.dp))
-                            Column {
-                                Text(
-                                    member.name,
-                                    color = buttonColors,
-                                    fontSize = 22.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    member.intro.ifEmpty { "這位玩家還沒寫自我介紹" },
-                                    color = Color.DarkGray,
-                                    fontSize = 14.sp
-                                )
-                            }
                         }
-                    }
 
-                // 空位
-                val nonOwnerMembers = members.filter { it.id != safeRoom.ownerId }
-                val emptySlots =
-                    (safeRoom.people - 1 - nonOwnerMembers.size).coerceAtLeast(0)
-                repeat(emptySlots) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(60.dp)
-                            .clip(cardShape)
-                            .background(cardBg)
-                            .padding(horizontal = 20.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.PersonAdd,
-                            contentDescription = null,
-                            tint = Color.Gray,
-                            modifier = Modifier.size(30.dp)
-                        )
                         Spacer(Modifier.width(24.dp))
-                        Text("等待玩家加入", color = Color.Gray, fontSize = 25.sp)
+                        Column {
+                            Text(
+                                member.name,
+                                color = buttonColors,
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                member.intro.ifEmpty { "這位玩家還沒寫自我介紹" },
+                                color = Color.DarkGray,
+                                fontSize = 14.sp
+                            )
+                        }
                     }
                 }
 
-                Spacer(Modifier.height(50.dp))
-
-                // 下方資訊格：深灰透明底 + 白字
-                val bottomBoxBg = Color(0xFF333333).copy(alpha = 0.7f)
-
-                val boxModifier = Modifier
-                    .weight(1f)
-                    .aspectRatio(1f)
-                    .background(
-                        bottomBoxBg,
-                        RoundedCornerShape(16.dp)
-                    )
-                    .padding(12.dp)
-
-                Column(
+            // 空位
+            val nonOwnerMembers = members.filter { it.id != safeRoom.ownerId }
+            val emptySlots = (safeRoom.people - 1 - nonOwnerMembers.size).coerceAtLeast(0)
+            repeat(emptySlots) {
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                        .height(60.dp)
+                        .background(cardBg, cardShape)
+                        .padding(horizontal = 20.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        // 規則
-                        Column(
-                            boxModifier.clickable { showRuleDialog = true },
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Text(
-                                "規則",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 20.sp,
-                                color = Color.White
-                            )
-                            Text(
-                                "${safeRoom.basePoint}/${safeRoom.taiPoint}",
-                                fontSize = 30.sp,
-                                color = Color.White
-                            )
-                        }
-                        // 時間
-                        Column(
-                            boxModifier,
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Text(
-                                "時間",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 20.sp,
-                                color = Color.White
-                            )
-                            Text(
-                                safeRoom.time,
-                                fontSize = 30.sp,
-                                color = Color.White
-                            )
-                            Spacer(Modifier.height(5.dp))
-                            Text(
-                                safeRoom.date,
-                                fontSize = 20.sp,
-                                color = Color.White
-                            )
-                        }
-                    }
+                    Icon(
+                        imageVector = Icons.Filled.PersonAdd,
+                        contentDescription = null,
+                        tint = Color.Gray,
+                        modifier = Modifier.size(30.dp)
+                    )
+                    Spacer(Modifier.width(24.dp))
+                    Text("等待玩家加入", color = Color.Gray, fontSize = 25.sp)
+                }
+            }
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+            Spacer(Modifier.height(50.dp))
+
+            // 下方資訊格（保持原樣）
+            val boxModifier = Modifier
+                .weight(1f)
+                .aspectRatio(1f)
+                .background(Color(0xFF303030).copy(alpha = 0.6f), RoundedCornerShape(16.dp))
+                .padding(12.dp)
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Column(
+                        boxModifier.clickable { showRuleDialog = true },
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
                     ) {
-                        // 備註
-                        Column(
-                            boxModifier.clickable { showNoteDialog = true },
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Text(
-                                "備註",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 20.sp,
-                                color = Color.White
-                            )
-                            Icon(
-                                imageVector = Icons.Filled.MoreHoriz,
-                                contentDescription = null,
-                                modifier = Modifier.size(52.dp),
-                                tint = Color.White
-                            )
-                        }
-                        // 地點
-                        Column(
-                            boxModifier.clickable {
-                                val gmmIntentUri =
-                                    Uri.parse("geo:0,0?q=${safeRoom.location}")
-                                val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
-                                mapIntent.setPackage("com.google.android.apps.maps")
-                                context.startActivity(mapIntent)
-                            },
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Text(
-                                "地點",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 20.sp,
-                                color = Color.White
-                            )
-                            Text(
-                                safeRoom.location.take(10),
-                                fontSize = 20.sp,
-                                textAlign = TextAlign.Center,
-                                color = Color.White
-                            )
-                        }
+                        Text("規則", fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                        Text("${safeRoom.basePoint}/${safeRoom.taiPoint}", fontSize = 30.sp)
+                    }
+                    Column(
+                        boxModifier,
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text("時間", fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                        Text(safeRoom.time, fontSize = 30.sp)
+                        Spacer(Modifier.height(5.dp))
+                        Text(safeRoom.date, fontSize = 20.sp)
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Column(
+                        boxModifier.clickable { showNoteDialog = true },
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text("備註", fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                        Icon(
+                            imageVector = Icons.Filled.MoreHoriz,
+                            contentDescription = null,
+                            modifier = Modifier.size(52.dp)
+                        )
+                    }
+                    Column(
+                        boxModifier.clickable {
+                            val gmmIntentUri = Uri.parse("geo:0,0?q=${safeRoom.location}")
+                            val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
+                            mapIntent.setPackage("com.google.android.apps.maps")
+                            context.startActivity(mapIntent)
+                        },
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text("地點", fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                        Text(
+                            safeRoom.location.take(10),
+                            fontSize = 20.sp,
+                            textAlign = TextAlign.Center
+                        )
                     }
                 }
             }
@@ -462,13 +449,12 @@ fun RoomDetailScreen(
             onDismissRequest = { showRuleDialog = false },
             confirmButton = {},
             text = {
-                Column(Modifier.padding(12.dp)) {
-                    StandardDialogTitle("麻將設定")
-                    Spacer(Modifier.height(12.dp))
-                    StandardDialogContent("將數：${safeRoom.rounds}")
-                    StandardDialogContent("花牌：${if (safeRoom.flower) "有" else "無"}")
-                    StandardDialogContent("骰規：${if (safeRoom.diceRule) "有" else "無"}")
-                    StandardDialogContent("哩咕：${if (safeRoom.ligu) "有" else "無"}")
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("麻將設定", fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                    Text("將數：${safeRoom.rounds}")
+                    Text("花牌：${if (safeRoom.flower) "有" else "無"}")
+                    Text("骰規：${if (safeRoom.diceRule) "有" else "無"}")
+                    Text("哩咕：${if (safeRoom.ligu) "有" else "無"}")
                 }
             }
         )
@@ -480,10 +466,19 @@ fun RoomDetailScreen(
             onDismissRequest = { showNoteDialog = false },
             confirmButton = {},
             text = {
-                Column(Modifier.padding(12.dp)) {
-                    StandardDialogTitle("房主備註")
-                    Spacer(Modifier.height(12.dp))
-                    StandardDialogContent(safeRoom.note?.ifEmpty { "無" } ?: "無")
+                Column(Modifier.fillMaxWidth()) {
+                    Text(
+                        "房主備註：",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.Black
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        safeRoom.note?.ifEmpty { "無" } ?: "無",
+                        fontSize = 18.sp,
+                        color = Color.DarkGray
+                    )
                 }
             }
         )
@@ -494,36 +489,25 @@ fun RoomDetailScreen(
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
             confirmButton = {
-                Button(
-                    onClick = {
-                        showDeleteDialog = false
-                        scope.launch {
-                            val ok = vm.deleteRoom(safeRoom.id)
-                            if (ok) {
-                                snackbarHostState.showSnackbar("房間已刪除")
-                                navController.popBackStack()
-                            } else {
-                                snackbarHostState.showSnackbar("刪除失敗，請稍後再試")
-                            }
+                Button(onClick = {
+                    showDeleteDialog = false
+                    scope.launch {
+                        val ok = vm.deleteRoom(safeRoom.id)
+                        if (ok) {
+                            snackbarHostState.showSnackbar("房間已刪除")
+                            navController.popBackStack()
+                        } else {
+                            snackbarHostState.showSnackbar("刪除失敗，請稍後再試")
                         }
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF616161),
-                        contentColor = Color.White
-                    )
-                ) { Text("確定") }
+                    }
+                }) { Text("確定") }
             },
             dismissButton = {
-                OutlinedButton(
-                    onClick = { showDeleteDialog = false },
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = Color(0xFF616161)
-                    )
-                ) { Text("取消") }
+                OutlinedButton(onClick = { showDeleteDialog = false }) { Text("否") }
             },
             text = {
-                Column(Modifier.padding(12.dp)) {
-                    StandardDialogTitle("你確定要刪除房間？")
+                Column(Modifier.fillMaxWidth()) {
+                    Text("你確定要刪除房間？", color = Color.Black, fontSize = 18.sp)
                 }
             }
         )
@@ -534,43 +518,28 @@ fun RoomDetailScreen(
         AlertDialog(
             onDismissRequest = { showLeaveDialog = false },
             confirmButton = {
-                Button(
-                    onClick = {
-                        showLeaveDialog = false
-                        scope.launch {
-                            val uid = vm.currentUserId()
-                            if (uid != null) {
-                                val ok = vm.leaveRoom(safeRoom.id, uid)
-                                if (ok) {
-                                    snackbarHostState.showSnackbar("已離開房間")
-                                    navController.popBackStack()
-                                } else {
-                                    snackbarHostState.showSnackbar("離開失敗")
-                                }
+                Button(onClick = {
+                    showLeaveDialog = false
+                    scope.launch {
+                        val uid = vm.currentUserId()
+                        if (uid != null) {
+                            val ok = vm.leaveRoom(safeRoom.id, uid)
+                            if (ok) {
+                                snackbarHostState.showSnackbar("已離開房間")
+                                navController.popBackStack()
                             } else {
-                                snackbarHostState.showSnackbar("請先登入")
+                                snackbarHostState.showSnackbar("離開失敗")
                             }
+                        } else {
+                            snackbarHostState.showSnackbar("請先登入")
                         }
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF616161),
-                        contentColor = Color.White
-                    )
-                ) { Text("確定") }
+                    }
+                }) { Text("確定") }
             },
             dismissButton = {
-                OutlinedButton(
-                    onClick = { showLeaveDialog = false },
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = Color(0xFF616161)
-                    )
-                ) { Text("取消") }
+                OutlinedButton(onClick = { showLeaveDialog = false }) { Text("否") }
             },
-            text = {
-                Column(Modifier.padding(12.dp)) {
-                    StandardDialogTitle("你確定要離開房間？")
-                }
-            }
+            text = { Text("你確定要離開房間？", fontSize = 18.sp, color = Color.Black) }
         )
     }
 
@@ -579,72 +548,37 @@ fun RoomDetailScreen(
         AlertDialog(
             onDismissRequest = { showJoinDialog = false },
             confirmButton = {
-                Button(
-                    onClick = {
-                        showJoinDialog = false
-                        scope.launch {
-                            val uid = vm.currentUserId()
-                            if (uid == null) {
-                                snackbarHostState.showSnackbar("請先登入")
-                                return@launch
-                            }
-                            if (role != RoomViewerRole.Visitor) {
-                                snackbarHostState.showSnackbar("你已在房間中")
-                                return@launch
-                            }
-                            if (isFull) {
-                                snackbarHostState.showSnackbar("房間已滿，無法加入")
-                                return@launch
-                            }
-
-                            val ok = vm.joinRoom(safeRoom.id, uid)
-                            if (ok) {
-                                snackbarHostState.showSnackbar("成功加入房間！")
-                                refresh()
-                            } else {
-                                snackbarHostState.showSnackbar("加入失敗，請稍後再試")
-                            }
+                Button(onClick = {
+                    showJoinDialog = false
+                    scope.launch {
+                        val uid = vm.currentUserId()
+                        if (uid == null) {
+                            snackbarHostState.showSnackbar("請先登入")
+                            return@launch
                         }
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF616161),
-                        contentColor = Color.White
-                    )
-                ) { Text("確定") }
+                        if (role != RoomViewerRole.Visitor) {
+                            snackbarHostState.showSnackbar("你已在房間中")
+                            return@launch
+                        }
+                        if (isFull) {
+                            snackbarHostState.showSnackbar("房間已滿，無法加入")
+                            return@launch
+                        }
+
+                        val ok = vm.joinRoom(safeRoom.id, uid)
+                        if (ok) {
+                            snackbarHostState.showSnackbar("成功加入房間！")
+                            refresh() // 立即刷新畫面：成員 + 角色變化
+                        } else {
+                            snackbarHostState.showSnackbar("加入失敗，請稍後再試")
+                        }
+                    }
+                }) { Text("確定") }
             },
             dismissButton = {
-                OutlinedButton(
-                    onClick = { showJoinDialog = false },
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = Color(0xFF616161)
-                    )
-                ) { Text("取消") }
+                OutlinedButton(onClick = { showJoinDialog = false }) { Text("取消") }
             },
-            text = {
-                Column(Modifier.padding(12.dp)) {
-                    StandardDialogTitle("你確定要加入這個房間？")
-                }
-            }
+            text = { Text("你確定要加入這個房間？", fontSize = 18.sp, color = Color.Black) }
         )
     }
-}
-
-// 共用 Dialog 樣式
-@Composable
-fun StandardDialogTitle(text: String) {
-    Text(
-        text = text,
-        fontWeight = FontWeight.Bold,
-        fontSize = 22.sp,
-        color = Color.Black
-    )
-}
-
-@Composable
-fun StandardDialogContent(text: String) {
-    Text(
-        text = text,
-        fontSize = 18.sp,
-        color = Color.DarkGray
-    )
 }

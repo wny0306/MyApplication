@@ -214,7 +214,7 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
     }
 
     /* ---------------------------------------------------------------------- */
-    /* ⭐ UI（完全未修改） */
+    /* ⭐ UI */
     /* ---------------------------------------------------------------------- */
     Scaffold(containerColor = Color(0xFFF8F9FA)) { padding ->
         Column(
@@ -328,7 +328,7 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
             }
 
 
-            OutlinedTextField(
+            /*OutlinedTextField(
                 value = devPassword,
                 onValueChange = { devPassword = it },
                 label = { Text("開發者密碼") },
@@ -355,7 +355,7 @@ fun LoginScreen(navController: NavController, vm: AuthViewModel = viewModel()) {
                 modifier = Modifier.fillMaxWidth().height(56.dp).padding(top = 12.dp)
             ) {
                 Text("開發者快速登入", fontSize = 16.sp)
-            }
+            }*/
         }
     }
 }
