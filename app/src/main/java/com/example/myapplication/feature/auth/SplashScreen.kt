@@ -8,7 +8,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavController
-import com.example.myapplication.data.datasource.local.UserPreferences
+import com.example.myapplication.data.repository.datasource.local.UserPreferences
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import kotlinx.coroutines.*
 

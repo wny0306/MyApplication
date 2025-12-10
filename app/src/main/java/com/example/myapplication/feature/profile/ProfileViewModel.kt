@@ -7,8 +7,8 @@ import android.util.Log
 import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.myapplication.data.datasource.AuthRepositoryImpl
-import com.example.myapplication.data.datasource.local.UserPreferences
+import com.example.myapplication.data.repository.datasource.AuthRepositoryImpl
+import com.example.myapplication.data.repository.datasource.local.UserPreferences
 import com.example.myapplication.data.repository.AuthRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow

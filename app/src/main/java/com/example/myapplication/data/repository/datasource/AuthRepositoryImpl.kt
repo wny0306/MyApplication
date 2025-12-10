@@ -1,7 +1,7 @@
-package com.example.myapplication.data.datasource
+package com.example.myapplication.data.repository.datasource
 
 import android.content.Context
-import com.example.myapplication.data.datasource.local.UserStorage
+import com.example.myapplication.data.repository.datasource.local.UserStorage
 import com.example.myapplication.data.repository.AuthRepository
 
 class AuthRepositoryImpl : AuthRepository {

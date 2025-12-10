@@ -227,7 +227,7 @@ fun RoomDetailScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             val buttonColors = Color.DarkGray
-            val cardBg = Color(0xFFE8E8E8)
+            val cardBg = Color(0xFFCCCCCC)
             val cardShape = RoundedCornerShape(16.dp)
 
             // 房主卡片（保留原本樣式，只換頭貼）
@@ -369,7 +369,7 @@ fun RoomDetailScreen(
             val boxModifier = Modifier
                 .weight(1f)
                 .aspectRatio(1f)
-                .background(Color(0xFF303030).copy(alpha = 0.6f), RoundedCornerShape(16.dp))
+                .background(Color(0xFFCCCCCC).copy(alpha = 0.80f), RoundedCornerShape(16.dp))
                 .padding(12.dp)
 
             Column(

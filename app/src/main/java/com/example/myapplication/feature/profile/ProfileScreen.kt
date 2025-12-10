@@ -26,11 +26,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import coil.compose.rememberAsyncImagePainter
-import com.example.myapplication.data.datasource.local.UserData
-import com.example.myapplication.data.datasource.local.UserPreferences
+import com.example.myapplication.data.repository.datasource.local.UserData
+import com.example.myapplication.data.repository.datasource.local.UserPreferences
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.linecorp.linesdk.api.LineApiClientBuilder

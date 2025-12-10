@@ -2,7 +2,7 @@ package com.example.myapplication.core
 
 import android.content.Context
 import android.util.Log
-import com.example.myapplication.data.datasource.local.UserPreferences
+import com.example.myapplication.data.repository.datasource.local.UserPreferences
 import com.example.myapplication.data.repository.RoomRepository
 import com.example.myapplication.domain.model.MahjongRoom
 import com.example.myapplication.domain.model.Member

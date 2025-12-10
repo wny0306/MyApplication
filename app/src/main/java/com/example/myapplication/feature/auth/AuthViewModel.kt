@@ -2,7 +2,7 @@ package com.example.myapplication.feature.auth
 
 import android.content.Context
 import androidx.lifecycle.ViewModel
-import com.example.myapplication.data.datasource.AuthRepositoryImpl
+import com.example.myapplication.data.repository.datasource.AuthRepositoryImpl
 import com.example.myapplication.data.repository.AuthRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
